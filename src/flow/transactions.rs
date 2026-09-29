@@ -1,12 +1,16 @@
 use crate::external::mongo::*;
 use crate::external::mq::*;
+use crate::models::{CertificateRow, TransactionCertificat};
 use millegrilles_common_rust::async_trait::async_trait;
+use millegrilles_common_rust::bson;
 use millegrilles_common_rust::error::Error as CommonError;
+use millegrilles_common_rust::millegrilles_cryptographie::x509::EnveloppeCertificat;
 use millegrilles_common_rust::mongo_dao::MongoDao;
 use millegrilles_common_rust::mongodb::ClientSession;
+use millegrilles_common_rust::openssl::x509::X509;
 use millegrilles_common_rust::serde_json::Value;
 use millegrilles_common_rust::v3::impls::transaction_service::TransactionServiceImpl;
-use millegrilles_common_rust::v3::models::{TransactionOperationAggregator, TransactionWrapper};
+use millegrilles_common_rust::v3::models::{BatchInsertions, TransactionOperationAggregator, TransactionWrapper};
 use millegrilles_common_rust::v3::{ConfigService, FormatService, TransactionRouter, TransactionService};
 use std::sync::Arc;
 
@@ -68,5 +72,18 @@ async fn save_certificate(
     mongo: &dyn MongoDao,
     wrapper: TransactionWrapper,
 ) -> Result<TransactionOperationAggregator, CommonError> {
-    todo!()
+
+    let certificate: TransactionCertificat = wrapper.message.deserialize()?;
+
+    let mut enveloppe = EnveloppeCertificat::try_from(certificate.pem.as_str())?;
+    if let Some(ca) = certificate.ca {
+        enveloppe.millegrille = Some(X509::from_pem(ca.as_bytes())?);
+    }
+    let row: CertificateRow = enveloppe.try_into()?;
+    let doc_row = bson::serialize_to_document(&row)?;
+
+    let mut aggregator = TransactionOperationAggregator::new();
+    aggregator.batch_insertion(BatchInsertions::new(COLLECTION_NAME_CERTIFICATES, vec![doc_row]))?;
+
+    Ok(aggregator)
 }
