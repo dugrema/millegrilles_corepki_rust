@@ -8,7 +8,6 @@ use millegrilles_common_rust::millegrilles_cryptographie::x509::EnveloppeCertifi
 use millegrilles_common_rust::mongo_dao::MongoDao;
 use millegrilles_common_rust::mongodb::ClientSession;
 use millegrilles_common_rust::openssl::x509::X509;
-use millegrilles_common_rust::serde_json::Value;
 use millegrilles_common_rust::v3::impls::transaction_service::TransactionServiceImpl;
 use millegrilles_common_rust::v3::models::{BatchInsertions, TransactionOperationAggregator, TransactionWrapper};
 use millegrilles_common_rust::v3::{ConfigService, FormatService, TransactionRouter, TransactionService};
@@ -23,9 +22,9 @@ impl PkiTransactionService {
         config: Arc<dyn ConfigService>,
         format: Arc<dyn FormatService>,
         mongo: Arc<dyn MongoDao>,
-        restoring: bool,
+        _restoring: bool,
     ) -> Self {
-        let router = PkiTransactionRouter { mongo: mongo.clone(), ignore_duplicates: restoring };
+        let router = PkiTransactionRouter {};
         let service = TransactionServiceImpl::new(
             config,
             format,
@@ -42,14 +41,13 @@ impl PkiTransactionService {
         self.transaction.process_transaction(wrapper, session).await
     }
 
-    pub async fn process_value(&self, domain: &str, action: &str, value: Value, session: Option<&mut ClientSession>) -> Result<(), CommonError> {
-        self.transaction.process_value(domain, action, value, session).await
-    }
+    // pub async fn process_value(&self, domain: &str, action: &str, value: Value, session: Option<&mut ClientSession>) -> Result<(), CommonError> {
+    //     self.transaction.process_value(domain, action, value, session).await
+    // }
 }
 
 struct PkiTransactionRouter {
-    mongo: Arc<dyn MongoDao>,
-    ignore_duplicates: bool,
+    // ignore_duplicates: bool,
 }
 
 #[async_trait]
@@ -61,7 +59,7 @@ impl TransactionRouter for PkiTransactionRouter {
     ) -> Result<TransactionOperationAggregator, CommonError> {
         match action.as_str() {
             TRANSACTION_ACTION_SAVE_CERTIFICATE | TRANSACTION_ACTION_NEW_CERTIFICATE => {
-                save_certificate(self.mongo.as_ref(), wrapper).await
+                save_certificate(wrapper).await
             },
             _ => Err(CommonError::Str("Unknown transaction action"))
         }
@@ -69,7 +67,6 @@ impl TransactionRouter for PkiTransactionRouter {
 }
 
 async fn save_certificate(
-    mongo: &dyn MongoDao,
     wrapper: TransactionWrapper,
 ) -> Result<TransactionOperationAggregator, CommonError> {
 

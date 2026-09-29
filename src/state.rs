@@ -4,7 +4,7 @@ use millegrilles_common_rust::chiffrage_cle::CleChiffrageHandlerImpl;
 use millegrilles_common_rust::configuration::{charger_configuration, charger_configuration_mongo, ConfigMessages, ConfigDb};
 use millegrilles_common_rust::openssl::pkey::{PKey, Private};
 use millegrilles_common_rust::error::Error as CommonError;
-use millegrilles_common_rust::mongo_dao::{initialiser, MongoDaoImpl};
+use millegrilles_common_rust::mongo_dao::initialiser;
 use millegrilles_common_rust::tokio::task::JoinSet;
 use millegrilles_common_rust::tokio_util::sync::CancellationToken;
 use millegrilles_common_rust::tracing::{debug, info};
@@ -25,9 +25,7 @@ use crate::flow::transactions::PkiTransactionService;
 
 pub struct AppContext {
     pub join_set: JoinSet<()>,
-    pub config: Arc<dyn ConfigService>,
     pub chiffrage: Arc<dyn ChiffrageService>,
-    pub mongo: Arc<MongoDaoImpl>,
     pub outbound: Arc<MessageOutboundFacade>,
     pub shutdown_token: CancellationToken,
 }
@@ -81,9 +79,6 @@ impl AppContext {
 
         let app_service = Arc::new(ApplicationService::new(
             security.clone(),
-            security.clone(),
-            messaging.clone(),
-            format.clone(),
             config.clone(),
             outbound.clone(),
             transaction.clone(),
@@ -110,9 +105,7 @@ impl AppContext {
 
         Ok(AppContext {
             join_set,
-            config: config.clone(),
             chiffrage: security.clone(),
-            mongo,
             outbound,
             shutdown_token,
         })

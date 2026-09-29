@@ -99,7 +99,6 @@ async fn init_tasks(outbound: &MessageOutboundFacade, chiffrage: &dyn ChiffrageS
     }
 }
 
-
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct Cli {

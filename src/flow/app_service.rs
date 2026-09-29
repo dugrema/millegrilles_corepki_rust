@@ -14,7 +14,7 @@ use millegrilles_common_rust::v3::facades::message_outbound::MessageOutboundFaca
 use millegrilles_common_rust::v3::impls::backup_restorer::RestorationState;
 use millegrilles_common_rust::v3::impls::config_service::ConfigServiceDbImpl;
 use millegrilles_common_rust::v3::impls::messaging_service::MessagingServiceImpl;
-use millegrilles_common_rust::v3::{BackupService, ChiffrageService, ConfigService, FormatService, MessagingService, PkiService};
+use millegrilles_common_rust::v3::{BackupService, ConfigService, PkiService};
 use std::sync::Arc;
 use crate::flow::backup::process_backup;
 use crate::flow::commands::{process_command, process_transaction};
@@ -25,9 +25,6 @@ use crate::flow::transactions::PkiTransactionService;
 /// Handles queue consumer threads, calls individual routing methods
 pub struct ApplicationService {
     pki: Arc<dyn PkiService>,
-    chiffrage: Arc<dyn ChiffrageService>,
-    messaging: Arc<dyn MessagingService>,
-    format: Arc<dyn FormatService>,
     config: Arc<dyn ConfigService>,
     outbound: Arc<MessageOutboundFacade>,
     transaction: Arc<PkiTransactionService>,
@@ -38,9 +35,6 @@ pub struct ApplicationService {
 impl ApplicationService {
     pub fn new(
         pki: Arc<dyn PkiService>,
-        chiffrage: Arc<dyn ChiffrageService>,
-        messaging: Arc<dyn MessagingService>,
-        format: Arc<dyn FormatService>,
         config: Arc<dyn ConfigService>,
         outbound: Arc<MessageOutboundFacade>,
         transaction: Arc<PkiTransactionService>,
@@ -49,9 +43,6 @@ impl ApplicationService {
     ) -> Self {
         Self {
             pki,
-            chiffrage,
-            messaging,
-            format,
             config,
             outbound,
             transaction,
@@ -101,9 +92,7 @@ impl ApplicationService {
             match result {
                 Ok(message) => {
                     if let Err(e) = process_ticker_job(
-                        self.mongo.as_ref(),
                         self.outbound.as_ref(),
-                        self.transaction.as_ref(),
                         self.backup.as_ref(),
                         message
                     ).await {

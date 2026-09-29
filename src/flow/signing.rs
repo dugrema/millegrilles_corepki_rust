@@ -1,6 +1,5 @@
 use millegrilles_common_rust::certificats::VerificateurPermissions;
 use millegrilles_common_rust::common_messages::DemandeSignature;
-use millegrilles_common_rust::configuration::ConfigMessages;
 use millegrilles_common_rust::error::Error as CommonError;
 use millegrilles_common_rust::constantes::*;
 use millegrilles_common_rust::millegrilles_cryptographie::messages_structs::MessageMilleGrillesBufferDefault;
