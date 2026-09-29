@@ -10,6 +10,7 @@ services:
     user: "${CONTAINER_UID}:${CONTAINER_GID}"
     x-millegrilles-certificat:
       roles:
+        - pki
         - core
       exchanges:
         - 4.secure
