@@ -5,7 +5,7 @@ include:
 name: ${INSTANCE_NAME}
 
 services:
-  core_pki:
+  corepki:
     image: "replace_me"
     user: "${CONTAINER_UID}:${CONTAINER_GID}"
     x-millegrilles-certificat:
@@ -26,8 +26,9 @@ services:
       - KEYFILE=/run/secrets/key_cert.pem
       - CAFILE=/run/secrets/millegrille.cert.pem
       - MG_REDIS_URL=rediss://client_rust@redis:6379#insecure
-      - MG_REDIS_PASSWORD_FILE=/run/secrets/passwd.redis.txt
-      - RUST_LOG=warn,millegrilles_common_rust=info
+      - MG_REDIS_PASSWORD_FILE=/run/secrets/redis.txt
+      - MG_CERTISSUER_URL=http://certissuer:2080
+      - RUST_LOG=error,millegrilles_common_rust=warn,millegrilles_corepki_rust=info
     volumes:
       - ${MILLEGRILLES_ROOT}/var/backup/domains:/var/opt/millegrilles/archives
     deploy:
@@ -37,7 +38,7 @@ services:
           memory: 250M
       restart_policy:
         condition: any
-        delay: 30s
+        delay: 20s
     configs:
       - source: mgca
         target: /run/secrets/millegrille.cert.pem
@@ -45,7 +46,7 @@ services:
       - source: core_pki
         target: key_cert.pem
       - source: passwd_redis
-        target: passwd.redis.txt
+        target: redis.txt
     networks:
       - app_net
 
@@ -55,6 +56,6 @@ configs:
 
 secrets:
   documents_backend:
-    file: ${MILLEGRILLES_ROOT}/secrets/documents_backend.pem
+    file: ${MILLEGRILLES_ROOT}/secrets/corepki.pem
   passwd_redis:
     file: ${MILLEGRILLES_ROOT}/secrets/redis.txt

@@ -1,8 +1,8 @@
 {
-  "name": "documents",
+  "name": "corepki",
   "version": "BUILD",
   "labels": {
-    "en": "Documents for MilleGrilles",
-    "fr": "Documents pour MilleGrilles"
+    "en": "x.509 certificate manager for MilleGrilles",
+    "fr": "Gestionnaire de certificats x.509 pour MilleGrilles"
   }
 }
