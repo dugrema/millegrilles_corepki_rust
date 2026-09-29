@@ -3,30 +3,30 @@ use crate::external::mq::*;
 use crate::flow::transactions::PkiTransactionService;
 use crate::models::TransactionCertificat;
 use millegrilles_common_rust::bson::doc;
+use millegrilles_common_rust::common_messages::DemandeSignature;
 use millegrilles_common_rust::constantes::*;
 use millegrilles_common_rust::error::Error as CommonError;
 use millegrilles_common_rust::millegrilles_cryptographie::x509::EnveloppeCertificat;
 use millegrilles_common_rust::mongo_dao::MongoDaoTyped;
 use millegrilles_common_rust::mongodb::options::Hint;
-use millegrilles_common_rust::tracing::info;
-use millegrilles_common_rust::v3::PkiService;
+use millegrilles_common_rust::tracing::{debug, info, warn};
+use millegrilles_common_rust::v3::{ConfigService, PkiService};
 use millegrilles_common_rust::v3::facades::message_inbound::MessageValidated;
 use millegrilles_common_rust::v3::facades::message_outbound::MessageOutboundFacade;
 use millegrilles_common_rust::v3::models::ErrorMessage;
+use crate::flow::signing::{sign_with_certissuer, validate_csr_signature_request};
 
-pub async fn process_command<M>(
-    mongo: &M,
-    pki: &dyn PkiService,
+pub async fn process_command(
+    config: &dyn ConfigService,
     outbound: &MessageOutboundFacade,
     wrapper: MessageValidated
-) -> Result<(), CommonError> where M: MongoDaoTyped
-{
+) -> Result<(), CommonError> {
     let action = match wrapper.get_routing_action() {
         Some(action) => action,
         None => return outbound.respond(wrapper.delivery_info, ErrorMessage::err("No action provided in command")).await
     };
     match action {
-        COMMAND_ACTION_SIGN_CSR => sign_csr(mongo, pki, outbound, wrapper).await,
+        COMMAND_ACTION_SIGN_CSR => sign_csr(config, outbound, wrapper).await,
         _ => {
             info!("Unknown action {} for process_command, skipping", action);
             Ok(())
@@ -34,16 +34,24 @@ pub async fn process_command<M>(
     }
 }
 
-async fn sign_csr<M>(
-    mongo: &M,
-    pki: &dyn PkiService,
+async fn sign_csr(
+    config: &dyn ConfigService,
     outbound: &MessageOutboundFacade,
     wrapper: MessageValidated,
-) -> Result<(), CommonError> where M: MongoDaoTyped
-{
-    let command: TransactionCertificat = wrapper.message.deserialize()?;
+) -> Result<(), CommonError> {
+    let command: DemandeSignature = wrapper.message.deserialize()?;
 
-    todo!()
+    if let Err(e) = validate_csr_signature_request(&command, wrapper.certificate.as_ref()) {
+        warn!("Access denied on a CSR signing request: {:?}", e);
+        return outbound.respond(wrapper.delivery_info, ErrorMessage::err_code(401, "Request denied")).await
+    }
+
+    if let Err(e) = sign_with_certissuer(config, &wrapper).await {
+        warn!("Error executing CSR signing request: {:?}", e);
+        return outbound.respond(wrapper.delivery_info, ErrorMessage::err_code(500, "Error signing CSR")).await
+    }
+
+    outbound.respond(wrapper.delivery_info, ErrorMessage::ok()).await
 }
 
 /// Process the command part of the transaction (checks, validations, volatile updates),

@@ -84,6 +84,7 @@ impl AppContext {
             security.clone(),
             messaging.clone(),
             format.clone(),
+            config.clone(),
             outbound.clone(),
             transaction.clone(),
             mongo.clone(),

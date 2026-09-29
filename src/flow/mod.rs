@@ -5,3 +5,4 @@ mod maintenance;
 mod commands;
 mod backup;
 mod requests;
+mod signing;

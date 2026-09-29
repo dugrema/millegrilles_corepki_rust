@@ -14,7 +14,7 @@ use millegrilles_common_rust::v3::facades::message_outbound::MessageOutboundFaca
 use millegrilles_common_rust::v3::impls::backup_restorer::RestorationState;
 use millegrilles_common_rust::v3::impls::config_service::ConfigServiceDbImpl;
 use millegrilles_common_rust::v3::impls::messaging_service::MessagingServiceImpl;
-use millegrilles_common_rust::v3::{BackupService, ChiffrageService, FormatService, MessagingService, PkiService};
+use millegrilles_common_rust::v3::{BackupService, ChiffrageService, ConfigService, FormatService, MessagingService, PkiService};
 use std::sync::Arc;
 use crate::flow::backup::process_backup;
 use crate::flow::commands::{process_command, process_transaction};
@@ -28,6 +28,7 @@ pub struct ApplicationService {
     chiffrage: Arc<dyn ChiffrageService>,
     messaging: Arc<dyn MessagingService>,
     format: Arc<dyn FormatService>,
+    config: Arc<dyn ConfigService>,
     outbound: Arc<MessageOutboundFacade>,
     transaction: Arc<PkiTransactionService>,
     mongo: Arc<MongoDaoImpl>,
@@ -40,6 +41,7 @@ impl ApplicationService {
         chiffrage: Arc<dyn ChiffrageService>,
         messaging: Arc<dyn MessagingService>,
         format: Arc<dyn FormatService>,
+        config: Arc<dyn ConfigService>,
         outbound: Arc<MessageOutboundFacade>,
         transaction: Arc<PkiTransactionService>,
         mongo: Arc<MongoDaoImpl>,
@@ -50,6 +52,7 @@ impl ApplicationService {
             chiffrage,
             messaging,
             format,
+            config,
             outbound,
             transaction,
             mongo,
@@ -151,8 +154,7 @@ impl ApplicationService {
                 Ok(message) => {
                     let routing = message.message.routage.clone();
                     if let Err(e) = process_command(
-                        self.mongo.as_ref(),
-                        self.pki.as_ref(),
+                        self.config.as_ref(),
                         self.outbound.as_ref(),
                         message
                     ).await {
