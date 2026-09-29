@@ -224,6 +224,7 @@ impl ApplicationService {
             COLLECTION_NAME_REDOLOG,
             COLLECTION_NAME_TRACKING,
             resume,
+            true,   // This is the domain that handles certificates, can't check while resuming
             version,
             master_key,
         ).await?;
