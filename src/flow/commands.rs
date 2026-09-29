@@ -1,5 +1,5 @@
 use crate::external::mongo::*;
-use crate::external::mq::{TRANSACTION_ACTION_NEW_CERTIFICATE, TRANSACTION_ACTION_SAVE_CERTIFICATE};
+use crate::external::mq::*;
 use crate::flow::transactions::PkiTransactionService;
 use crate::models::TransactionCertificat;
 use millegrilles_common_rust::bson::doc;
@@ -13,6 +13,38 @@ use millegrilles_common_rust::v3::PkiService;
 use millegrilles_common_rust::v3::facades::message_inbound::MessageValidated;
 use millegrilles_common_rust::v3::facades::message_outbound::MessageOutboundFacade;
 use millegrilles_common_rust::v3::models::ErrorMessage;
+
+pub async fn process_command<M>(
+    mongo: &M,
+    pki: &dyn PkiService,
+    outbound: &MessageOutboundFacade,
+    wrapper: MessageValidated
+) -> Result<(), CommonError> where M: MongoDaoTyped
+{
+    let action = match wrapper.get_routing_action() {
+        Some(action) => action,
+        None => return outbound.respond(wrapper.delivery_info, ErrorMessage::err("No action provided in command")).await
+    };
+    match action {
+        COMMAND_ACTION_SIGN_CSR => sign_csr(mongo, pki, outbound, wrapper).await,
+        _ => {
+            info!("Unknown action {} for process_command, skipping", action);
+            Ok(())
+        }
+    }
+}
+
+async fn sign_csr<M>(
+    mongo: &M,
+    pki: &dyn PkiService,
+    outbound: &MessageOutboundFacade,
+    wrapper: MessageValidated,
+) -> Result<(), CommonError> where M: MongoDaoTyped
+{
+    let command: TransactionCertificat = wrapper.message.deserialize()?;
+
+    todo!()
+}
 
 /// Process the command part of the transaction (checks, validations, volatile updates),
 /// calls transaction processor and then handles responses and emits events.

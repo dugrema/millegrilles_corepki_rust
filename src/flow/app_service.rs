@@ -17,8 +17,9 @@ use millegrilles_common_rust::v3::impls::messaging_service::MessagingServiceImpl
 use millegrilles_common_rust::v3::{BackupService, ChiffrageService, FormatService, MessagingService, PkiService};
 use std::sync::Arc;
 use crate::flow::backup::process_backup;
-use crate::flow::commands::process_transaction;
+use crate::flow::commands::{process_command, process_transaction};
 use crate::flow::maintenance::process_ticker_job;
+use crate::flow::requests::process_request;
 use crate::flow::transactions::PkiTransactionService;
 
 /// Handles queue consumer threads, calls individual routing methods
@@ -75,6 +76,10 @@ impl ApplicationService {
 
         let self_clone = self.clone();
         let incoming_clone = incoming.clone();
+        join_set.spawn(async move {self_clone.process_certificate_signing_thread(incoming_clone).await});
+
+        let self_clone = self.clone();
+        let incoming_clone = incoming.clone();
         join_set.spawn(async move {self_clone.process_transaction_thread(incoming_clone).await});
 
         let self_clone = self.clone();
@@ -120,16 +125,13 @@ impl ApplicationService {
             match result {
                 Ok(message) => {
                     let routing = message.message.routage.clone();
-                    todo!()
-                    // if let Err(e) = process_request(
-                    //     self.mongo.as_ref(),
-                    //     self.messaging.as_ref(),
-                    //     self.format.as_ref(),
-                    //     self.outbound.as_ref(),
-                    //     message
-                    // ).await {
-                    //     error!("Request {:?} failed: {}", routing, e);
-                    // }
+                    if let Err(e) = process_request(
+                        self.mongo.as_ref(),
+                        self.outbound.as_ref(),
+                        message
+                    ).await {
+                        error!("Request {:?} failed: {}", routing, e);
+                    }
                 }
                 Err(e) => {
                     error!("Error processing request message: {}", e);
@@ -148,16 +150,14 @@ impl ApplicationService {
             match result {
                 Ok(message) => {
                     let routing = message.message.routage.clone();
-                    todo!()
-                    // if let Err(e) = process_request(
-                    //     self.mongo.as_ref(),
-                    //     self.messaging.as_ref(),
-                    //     self.format.as_ref(),
-                    //     self.outbound.as_ref(),
-                    //     message
-                    // ).await {
-                    //     error!("Request {:?} failed: {}", routing, e);
-                    // }
+                    if let Err(e) = process_command(
+                        self.mongo.as_ref(),
+                        self.pki.as_ref(),
+                        self.outbound.as_ref(),
+                        message
+                    ).await {
+                        error!("Request {:?} failed: {}", routing, e);
+                    }
                 }
                 Err(e) => {
                     error!("Error processing issue message: {}", e);

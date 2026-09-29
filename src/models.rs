@@ -112,3 +112,38 @@ impl TryFrom<EnveloppeCertificat> for CertificateRow {
         })
     }
 }
+
+#[derive(Clone, Deserialize)]
+pub struct RequestCertificate {
+    pub fingerprint: String
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ReponseEnveloppe {
+    pub chaine_pem: Vec<String>,
+    pub fingerprint: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ca_pem: Option<String>,
+}
+
+impl TryFrom<&EnveloppeCertificat> for ReponseEnveloppe {
+    type Error = CommonError;
+    fn try_from(value: &EnveloppeCertificat) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chaine_pem: value.chaine_pem()?,
+            fingerprint: value.fingerprint()?,
+            ca_pem: value.ca_pem()?,
+        })
+    }
+}
+
+impl TryFrom<CertificateRow> for ReponseEnveloppe {
+    type Error = CommonError;
+    fn try_from(value: CertificateRow) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chaine_pem: value.chaine,
+            fingerprint: value.fingerprint,
+            ca_pem: value.ca,
+        })
+    }
+}
