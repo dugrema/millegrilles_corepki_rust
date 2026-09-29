@@ -1,7 +1,7 @@
 use crate::external::mongo::*;
 use crate::external::mq::*;
 use crate::flow::transactions::PkiTransactionService;
-use crate::models::TransactionCertificat;
+use crate::models::{CommandSaveCertificate, TransactionCertificat};
 use millegrilles_common_rust::bson::doc;
 use millegrilles_common_rust::common_messages::DemandeSignature;
 use millegrilles_common_rust::constantes::*;
@@ -9,11 +9,13 @@ use millegrilles_common_rust::error::Error as CommonError;
 use millegrilles_common_rust::millegrilles_cryptographie::x509::EnveloppeCertificat;
 use millegrilles_common_rust::mongo_dao::MongoDaoTyped;
 use millegrilles_common_rust::mongodb::options::Hint;
+use millegrilles_common_rust::serde_json;
 use millegrilles_common_rust::tracing::{info, warn};
 use millegrilles_common_rust::v3::{ConfigService, PkiService};
 use millegrilles_common_rust::v3::facades::message_inbound::MessageValidated;
 use millegrilles_common_rust::v3::facades::message_outbound::MessageOutboundFacade;
 use millegrilles_common_rust::v3::models::ErrorMessage;
+use crate::constants::DOMAIN_NAME;
 use crate::flow::signing::{sign_with_certissuer, validate_csr_signature_request};
 
 pub async fn process_command(
@@ -85,7 +87,7 @@ async fn save_certificate<M>(
     transaction: &PkiTransactionService,
     wrapper: MessageValidated,
 ) -> Result<(), CommonError> where M: MongoDaoTyped {
-    let transaction_value: TransactionCertificat = wrapper.message.deserialize()?;
+    let transaction_value: CommandSaveCertificate = wrapper.message.deserialize()?;
 
     let ca = match transaction_value.ca.as_ref() {
         Some(ca) => Some(ca.as_str()),
@@ -93,11 +95,12 @@ async fn save_certificate<M>(
     };
 
     // Validate the certificate (current date)
-    let certificate = match pki.validate_pem(transaction_value.pem.as_str(), ca.clone(), None) {
+    let pem_chain_str = transaction_value.chaine_pem.join("\n");
+    let certificate = match pki.validate_pem(pem_chain_str.as_str(), ca.clone(), None) {
         Ok(certificate) => certificate,
         Err(_e) => {
             // Assume the certificate is not currently valid. Get the not-before-date to confirm.
-            let enveloppe = match EnveloppeCertificat::try_from(transaction_value.pem.as_str()) {
+            let enveloppe = match EnveloppeCertificat::try_from(pem_chain_str.as_str()) {
                 Ok(enveloppe) => enveloppe,
                 Err(e) => {
                     info!("Invalid certificate: {:?}", e);
@@ -105,7 +108,7 @@ async fn save_certificate<M>(
                 }
             };
             let not_valid_before = enveloppe.not_valid_before()?;
-            match pki.validate_pem(transaction_value.pem.as_str(), ca, Some(&not_valid_before)) {
+            match pki.validate_pem(pem_chain_str.as_str(), ca, Some(&not_valid_before)) {
                 Ok(certificate) => certificate,
                 Err(e) => {
                     info!("Invalid certificate: {:?}", e);
@@ -139,7 +142,14 @@ async fn save_certificate<M>(
 
     // Run transaction updates
     let delivery_info = wrapper.delivery_info.clone();
-    if let Err(e) = transaction.process_transaction(wrapper.into(), None).await {
+    //if let Err(e) = transaction.process_transaction(wrapper.into(), None).await {
+    let transaction_value = TransactionCertificat { pem: pem_chain_str, ca: transaction_value.ca };
+    if let Err(e) = transaction.process_value(
+        DOMAIN_NAME,
+        TRANSACTION_ACTION_NEW_CERTIFICATE,
+        serde_json::to_value(transaction_value)?,
+        None
+    ).await {
         info!("Error saving certificate: {:?}", e);
         return outbound.respond(delivery_info, ErrorMessage::err_code(500, "Error saving certificate")).await
     }

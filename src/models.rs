@@ -13,6 +13,12 @@ pub struct TransactionCertificat {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CommandSaveCertificate {
+    pub chaine_pem: Vec<String>,
+    pub ca: Option<String>
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CertificateRow {
     pub fingerprint: String,
     pub fingerprint_pk: String,

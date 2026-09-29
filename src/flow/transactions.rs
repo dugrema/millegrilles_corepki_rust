@@ -12,6 +12,7 @@ use millegrilles_common_rust::v3::impls::transaction_service::TransactionService
 use millegrilles_common_rust::v3::models::{BatchInsertions, TransactionOperationAggregator, TransactionWrapper};
 use millegrilles_common_rust::v3::{ConfigService, FormatService, TransactionRouter, TransactionService};
 use std::sync::Arc;
+use millegrilles_common_rust::serde_json::Value;
 
 pub struct PkiTransactionService {
     pub transaction: Arc<dyn TransactionService>,
@@ -41,9 +42,9 @@ impl PkiTransactionService {
         self.transaction.process_transaction(wrapper, session).await
     }
 
-    // pub async fn process_value(&self, domain: &str, action: &str, value: Value, session: Option<&mut ClientSession>) -> Result<(), CommonError> {
-    //     self.transaction.process_value(domain, action, value, session).await
-    // }
+    pub async fn process_value(&self, domain: &str, action: &str, value: Value, session: Option<&mut ClientSession>) -> Result<(), CommonError> {
+        self.transaction.process_value(domain, action, value, session).await
+    }
 }
 
 struct PkiTransactionRouter {
