@@ -2,6 +2,7 @@ mod constants;
 mod state;
 mod external;
 mod flow;
+mod models;
 
 use clap::Parser;
 use clap_derive::Parser;

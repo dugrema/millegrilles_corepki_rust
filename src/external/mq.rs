@@ -8,15 +8,14 @@ pub const QUEUE_TTL_DEFAULT: u32 = 30_000;
 pub const QUEUE_TTL_TRANSACTIONS: u32 = 3 * 3_600_000;
 pub const QUEUE_TICKER: &str = "job_ticker";
 pub const QUEUE_REQUESTS: &str = "requests";
-pub const QUEUE_COMMANDS: &str = "commands";
 pub const QUEUE_ISSUE: &str = "issue";
 pub const QUEUE_TRANSACTIONS: &str = "transactions";
 pub const QUEUE_BACKUP: &str = "backup";
 
 pub const REQUEST_ACTION_INFOCERTIFICAT: &str = "infoCertificat";
 pub const REQUEST_ACTION_CERTIFICATEBYPK: &str = "certificatParPk";
-pub const COMMAND_ACTION_SAVE_CERTIFICATE: &str = "certificat";
-pub const COMMAND_ACTION_NEW_CERTIFICATE: &str = "nouveauCertificat";
+pub const TRANSACTION_ACTION_SAVE_CERTIFICATE: &str = "certificat";
+pub const TRANSACTION_ACTION_NEW_CERTIFICATE: &str = "nouveauCertificat";
 pub const COMMAND_ACTION_SIGN_CSR: &str = "signerCsr";
 
 
@@ -61,8 +60,8 @@ pub fn init_queues(mq: &MessagingServiceImpl) -> Result<(), CommonError> {
         ConfigQueue {
             nom_queue: format!("{}/{}", DOMAIN_NAME, QUEUE_TRANSACTIONS),
             routing_keys: vec![
-                ConfigRoutingExchange { routing_key: format!("commande.{}.{}", DOMAIN_NAME, COMMAND_ACTION_SAVE_CERTIFICATE), exchange: Securite::L3Protege },
-                ConfigRoutingExchange { routing_key: format!("commande.{}.{}", DOMAIN_NAME, COMMAND_ACTION_NEW_CERTIFICATE), exchange: Securite::L3Protege },
+                ConfigRoutingExchange { routing_key: format!("commande.{}.{}", DOMAIN_NAME, TRANSACTION_ACTION_SAVE_CERTIFICATE), exchange: Securite::L3Protege },
+                ConfigRoutingExchange { routing_key: format!("commande.{}.{}", DOMAIN_NAME, TRANSACTION_ACTION_NEW_CERTIFICATE), exchange: Securite::L3Protege },
             ],
             ttl: Some(QUEUE_TTL_TRANSACTIONS),
             durable: true,

@@ -16,6 +16,9 @@ use millegrilles_common_rust::v3::impls::config_service::ConfigServiceDbImpl;
 use millegrilles_common_rust::v3::impls::messaging_service::MessagingServiceImpl;
 use millegrilles_common_rust::v3::{BackupService, ChiffrageService, FormatService, MessagingService, PkiService};
 use std::sync::Arc;
+use crate::flow::backup::process_backup;
+use crate::flow::commands::process_transaction;
+use crate::flow::maintenance::process_ticker_job;
 use crate::flow::transactions::PkiTransactionService;
 
 /// Handles queue consumer threads, calls individual routing methods
@@ -89,16 +92,15 @@ impl ApplicationService {
         while let Some(result) = streamer.next().await {
             match result {
                 Ok(message) => {
-                    todo!()
-                    // if let Err(e) = process_ticker_job(
-                    //     self.mongo.as_ref(),
-                    //     self.outbound.as_ref(),
-                    //     self.transaction.as_ref(),
-                    //     self.backup.as_ref(),
-                    //     message
-                    // ).await {
-                    //     error!("Ticker job failed: {}", e);
-                    // }
+                    if let Err(e) = process_ticker_job(
+                        self.mongo.as_ref(),
+                        self.outbound.as_ref(),
+                        self.transaction.as_ref(),
+                        self.backup.as_ref(),
+                        message
+                    ).await {
+                        error!("Ticker job failed: {}", e);
+                    }
                 }
                 Err(e) => {
                     error!("Error processing ticker message: {}", e);
@@ -137,6 +139,34 @@ impl ApplicationService {
         debug!("process_requests_thread Closed");
     }
 
+    async fn process_certificate_signing_thread(&self, incoming: Arc<MessageInboundValidator>) {
+        let streamer = incoming.consume_named_queue(
+            format!("{}/{}", DOMAIN_NAME, QUEUE_ISSUE).as_str(),
+        ).expect("Consumer streaming init failed");
+        tokio::pin!(streamer);
+        while let Some(result) = streamer.next().await {
+            match result {
+                Ok(message) => {
+                    let routing = message.message.routage.clone();
+                    todo!()
+                    // if let Err(e) = process_request(
+                    //     self.mongo.as_ref(),
+                    //     self.messaging.as_ref(),
+                    //     self.format.as_ref(),
+                    //     self.outbound.as_ref(),
+                    //     message
+                    // ).await {
+                    //     error!("Request {:?} failed: {}", routing, e);
+                    // }
+                }
+                Err(e) => {
+                    error!("Error processing issue message: {}", e);
+                }
+            }
+        }
+        debug!("process_certificate_signing_thread Closed");
+    }
+
     // Transactions
     async fn process_transaction_thread(&self, incoming: Arc<MessageInboundValidator>) {
         let streamer = incoming.consume_named_queue(
@@ -146,17 +176,16 @@ impl ApplicationService {
         while let Some(result) = streamer.next().await {
             match result {
                 Ok(message) => {
-                    todo!()
-                    // if let Err(e) = process_transaction(
-                    //     self.mongo.as_ref(),
-                    //     self.messaging.as_ref(),
-                    //     self.pki.as_ref(),
-                    //     self.outbound.as_ref(),
-                    //     self.transaction.as_ref(),
-                    //     message
-                    // ).await {
-                    //     error!("Transaction job failed: {}", e);
-                    // }
+                    if let Err(e) = process_transaction(
+                        self.mongo.as_ref(),
+                        self.messaging.as_ref(),
+                        self.pki.as_ref(),
+                        self.outbound.as_ref(),
+                        self.transaction.as_ref(),
+                        message
+                    ).await {
+                        error!("Transaction job failed: {}", e);
+                    }
                 }
                 Err(e) => {
                     error!("Error processing transaction message: {}", e);
@@ -174,14 +203,13 @@ impl ApplicationService {
         while let Some(result) = streamer.next().await {
             match result {
                 Ok(message) => {
-                    todo!()
-                    // if let Err(e) = process_backup(
-                    //     self.outbound.as_ref(),
-                    //     self.backup.as_ref(),
-                    //     message
-                    // ).await {
-                    //     error!("Reading job failed: {}", e);
-                    // }
+                    if let Err(e) = process_backup(
+                        self.outbound.as_ref(),
+                        self.backup.as_ref(),
+                        message
+                    ).await {
+                        error!("Reading job failed: {}", e);
+                    }
                 }
                 Err(e) => {
                     error!("Error processing reading message: {}", e);

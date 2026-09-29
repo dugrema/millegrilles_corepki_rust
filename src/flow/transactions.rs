@@ -1,13 +1,14 @@
-use std::sync::Arc;
+use crate::external::mongo::*;
+use crate::external::mq::*;
 use millegrilles_common_rust::async_trait::async_trait;
-use millegrilles_common_rust::mongo_dao::MongoDao;
-use millegrilles_common_rust::v3::{ConfigService, FormatService, TransactionRouter, TransactionService};
-use millegrilles_common_rust::v3::models::{TransactionOperationAggregator, TransactionWrapper};
 use millegrilles_common_rust::error::Error as CommonError;
+use millegrilles_common_rust::mongo_dao::MongoDao;
 use millegrilles_common_rust::mongodb::ClientSession;
 use millegrilles_common_rust::serde_json::Value;
 use millegrilles_common_rust::v3::impls::transaction_service::TransactionServiceImpl;
-use crate::external::mongo::*;
+use millegrilles_common_rust::v3::models::{TransactionOperationAggregator, TransactionWrapper};
+use millegrilles_common_rust::v3::{ConfigService, FormatService, TransactionRouter, TransactionService};
+use std::sync::Arc;
 
 pub struct PkiTransactionService {
     pub transaction: Arc<dyn TransactionService>,
@@ -55,9 +56,17 @@ impl TransactionRouter for PkiTransactionRouter {
         wrapper: TransactionWrapper
     ) -> Result<TransactionOperationAggregator, CommonError> {
         match action.as_str() {
-            // TODO TRANSACTION_SAUVEGARDER_CATEGORIE_USAGER => save_user_category(self.mongo.as_ref(), wrapper).await,
-
+            TRANSACTION_ACTION_SAVE_CERTIFICATE | TRANSACTION_ACTION_NEW_CERTIFICATE => {
+                save_certificate(self.mongo.as_ref(), wrapper).await
+            },
             _ => Err(CommonError::Str("Unknown transaction action"))
         }
     }
+}
+
+async fn save_certificate(
+    mongo: &dyn MongoDao,
+    wrapper: TransactionWrapper,
+) -> Result<TransactionOperationAggregator, CommonError> {
+    todo!()
 }
