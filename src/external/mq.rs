@@ -72,6 +72,7 @@ pub fn init_queues(mq: &MessagingServiceImpl) -> Result<(), CommonError> {
         nom_queue: format!("{}/{}", DOMAIN_NAME, QUEUE_BACKUP),
         routing_keys: vec![
             ConfigRoutingExchange { routing_key: format!("requete.{}.getNombreTransactions", DOMAIN_NAME), exchange: Securite::L2Prive },
+            ConfigRoutingExchange { routing_key: format!("commande.{}.{}", DOMAIN_NAME, COMMANDE_DECLENCHER_BACKUP), exchange: Securite::L3Protege },
         ],
         ttl: Some(QUEUE_TTL_DEFAULT),
         durable: true,
