@@ -4,7 +4,7 @@ use crate::external::mq::{REQUEST_ACTION_CERTIFICATEBYPK, REQUEST_ACTION_INFOCER
 use millegrilles_common_rust::error::Error as CommonError;
 use millegrilles_common_rust::mongo_dao::MongoDaoTyped;
 use millegrilles_common_rust::mongodb::options::Hint;
-use millegrilles_common_rust::tracing::info;
+use millegrilles_common_rust::tracing::{debug, info};
 use millegrilles_common_rust::serde::Deserialize;
 use millegrilles_common_rust::v3::facades::message_inbound::MessageValidated;
 use millegrilles_common_rust::v3::facades::message_outbound::MessageOutboundFacade;
@@ -41,6 +41,7 @@ async fn request_certificate<M>(
 
     let request: RequestCertificate = wrapper.message.deserialize()?;
     let fingerprint = request.fingerprint;
+    debug!("Request for cert {}", fingerprint);
 
     let filter = doc!{ PKI_DOCUMENT_CHAMP_FINGERPRINT: &fingerprint};
     let collection = mongo.get_collection_typed::<CertificateRow>(COLLECTION_NAME_CERTIFICATES)?;

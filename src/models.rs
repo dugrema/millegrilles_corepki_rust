@@ -147,7 +147,7 @@ impl TryFrom<CertificateRow> for ReponseEnveloppe {
     type Error = CommonError;
     fn try_from(value: CertificateRow) -> Result<Self, Self::Error> {
         Ok(Self {
-            chaine_pem: value.chaine,
+            chaine_pem: value.certificat,
             fingerprint: value.fingerprint,
             ca_pem: value.ca,
         })
