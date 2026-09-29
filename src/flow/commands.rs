@@ -1,26 +1,23 @@
-use millegrilles_common_rust::bson::doc;
-use millegrilles_common_rust::certificats::VerificateurPermissions;
-use millegrilles_common_rust::common_messages::BackupEvent;
-use millegrilles_common_rust::constantes::*;
-use millegrilles_common_rust::v3::{BackupService, MessagingService, PkiService, PresenceService};
-use millegrilles_common_rust::v3::facades::message_inbound::MessageValidated;
-use millegrilles_common_rust::v3::facades::message_outbound::MessageOutboundFacade;
-use millegrilles_common_rust::error::Error as CommonError;
-use millegrilles_common_rust::millegrilles_cryptographie::x509::EnveloppeCertificat;
-use millegrilles_common_rust::mongo_dao::MongoDaoTyped;
-use millegrilles_common_rust::tracing::{debug, error, info, warn};
-use millegrilles_common_rust::v3::models::ErrorMessage;
-use crate::constants::*;
 use crate::external::mongo::*;
 use crate::external::mq::{TRANSACTION_ACTION_NEW_CERTIFICATE, TRANSACTION_ACTION_SAVE_CERTIFICATE};
 use crate::flow::transactions::PkiTransactionService;
 use crate::models::TransactionCertificat;
+use millegrilles_common_rust::bson::doc;
+use millegrilles_common_rust::constantes::*;
+use millegrilles_common_rust::error::Error as CommonError;
+use millegrilles_common_rust::millegrilles_cryptographie::x509::EnveloppeCertificat;
+use millegrilles_common_rust::mongo_dao::MongoDaoTyped;
+use millegrilles_common_rust::mongodb::options::Hint;
+use millegrilles_common_rust::tracing::info;
+use millegrilles_common_rust::v3::PkiService;
+use millegrilles_common_rust::v3::facades::message_inbound::MessageValidated;
+use millegrilles_common_rust::v3::facades::message_outbound::MessageOutboundFacade;
+use millegrilles_common_rust::v3::models::ErrorMessage;
 
 /// Process the command part of the transaction (checks, validations, volatile updates),
 /// calls transaction processor and then handles responses and emits events.
 pub async fn process_transaction<M>(
     mongo: &M,
-    messaging: &dyn MessagingService,
     pki: &dyn PkiService,
     outbound: &MessageOutboundFacade,
     transaction: &PkiTransactionService,
@@ -87,9 +84,15 @@ async fn save_certificate<M>(
         }
     };
 
+    // Do an existing query, ideally this will only hit the index
     let filter = doc!{ PKI_DOCUMENT_CHAMP_FINGERPRINT: &fingerprint };
     let collection = mongo.get_collection(COLLECTION_NAME_CERTIFICATES)?;
-    if let Some(_row) = collection.find_one(filter).projection(doc!{"_id": true}).await? {
+    if let Some(_row) = collection
+        .find_one(filter)
+        .projection(doc!{PKI_DOCUMENT_CHAMP_FINGERPRINT: true})
+        .hint(Hint::Name(PKI_DOCUMENT_CHAMP_FINGERPRINT.to_string()))
+        .await?
+    {
         // The certificate has already been received and processed successfully - respond with OK
         return outbound.respond(wrapper.delivery_info, ErrorMessage::ok()).await
     }
