@@ -55,7 +55,7 @@ configs:
     file: ${MILLEGRILLES_ROOT}/etc/millegrille.pem
 
 secrets:
-  documents_backend:
+  core_pki:
     file: ${MILLEGRILLES_ROOT}/secrets/corepki.pem
   passwd_redis:
     file: ${MILLEGRILLES_ROOT}/secrets/redis.txt
