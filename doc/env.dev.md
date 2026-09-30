@@ -16,4 +16,9 @@ MG_MQ_HOST=localhost
 MG_REDIS_PASSWORD_FILE=/home/mathieu/tas/dev/millegrilles/dev1/secrets/redis.txt
 MG_REDIS_URL=rediss://client_rust@localhost:6379#insecure
 RUST_LOG=warn,millegrilles_corepki_rust=debug,millegrilles_common_rust=debug
+DEV=1
 </pre>
+
+## Command line parameters
+
+run --package millegrilles_corepki_rust --bin millegrilles_corepki_rust -- --restore --capath /path/to/ca.pem --noresume
