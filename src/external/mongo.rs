@@ -1,4 +1,3 @@
-use millegrilles_common_rust::configuration::ConfigMessages;
 use millegrilles_common_rust::constantes::*;
 use millegrilles_common_rust::error::Error as CommonError;
 use millegrilles_common_rust::mongo_dao::{ChampIndex, IndexOptions, MongoDao};
@@ -9,9 +8,8 @@ pub const COLLECTION_NAME_CERTIFICATES: &str = "CorePki/certificates";
 pub const INDEX_REDO_LOG_ID: &str = "redo_log_id";
 pub const PKI_DOCUMENT_CHAMP_FINGERPRINT_PK: &str = "fingerprint_pk";
 
-pub async fn create_index_mongodb(db: &dyn MongoDao, config: &dyn ConfigMessages) -> Result<(), CommonError> {
+pub async fn create_index_mongodb(db: &dyn MongoDao) -> Result<(), CommonError> {
     db.create_index(
-        config,
         COLLECTION_NAME_REDOLOG,
         vec!(
             ChampIndex { nom_champ: String::from(TRANSACTION_CHAMP_ID), direction: 1 },
@@ -23,7 +21,6 @@ pub async fn create_index_mongodb(db: &dyn MongoDao, config: &dyn ConfigMessages
     ).await?;
 
     db.create_index(
-        config,
         COLLECTION_NAME_REDOLOG,
         vec!(
             ChampIndex { nom_champ: String::from(FIELD_PROCESSED), direction: 1 },
@@ -35,7 +32,6 @@ pub async fn create_index_mongodb(db: &dyn MongoDao, config: &dyn ConfigMessages
     ).await?;
 
     db.create_index(
-        config,
         COLLECTION_NAME_TRACKING,
         vec!(
             ChampIndex { nom_champ: String::from(FIELD_BID), direction: 1 },
@@ -47,7 +43,6 @@ pub async fn create_index_mongodb(db: &dyn MongoDao, config: &dyn ConfigMessages
     ).await?;
 
     db.create_index(
-        config,
         COLLECTION_NAME_TRACKING,
         vec!(
             ChampIndex { nom_champ: String::from(FIELD_DATE_PROCESSED), direction: 1 },
@@ -59,7 +54,6 @@ pub async fn create_index_mongodb(db: &dyn MongoDao, config: &dyn ConfigMessages
     ).await?;
 
     db.create_index(
-        config,
         COLLECTION_NAME_CERTIFICATES,
         vec!(
             ChampIndex { nom_champ: String::from(PKI_DOCUMENT_CHAMP_FINGERPRINT), direction: 1 },
@@ -71,7 +65,6 @@ pub async fn create_index_mongodb(db: &dyn MongoDao, config: &dyn ConfigMessages
     ).await?;
 
     db.create_index(
-        config,
         COLLECTION_NAME_CERTIFICATES,
         vec!(
             ChampIndex { nom_champ: String::from(PKI_DOCUMENT_CHAMP_FINGERPRINT_PK), direction: 1 },
