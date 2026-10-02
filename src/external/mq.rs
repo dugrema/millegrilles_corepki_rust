@@ -17,7 +17,7 @@ pub const REQUEST_ACTION_CERTIFICATEBYPK: &str = "certificatParPk";
 pub const TRANSACTION_ACTION_SAVE_CERTIFICATE: &str = "certificat";
 pub const TRANSACTION_ACTION_NEW_CERTIFICATE: &str = "nouveauCertificat";
 pub const COMMAND_ACTION_SIGN_CSR: &str = "signerCsr";
-
+pub const EVENT_KEYMASTER_CERTIFICATE: &str = "certMaitreDesCles";
 
 pub fn init_queues(mq: &MessagingServiceImpl) -> Result<(), CommonError> {
     // Configure the queues and add to messaging service (will spawn consumer threads)
@@ -49,7 +49,10 @@ pub fn init_queues(mq: &MessagingServiceImpl) -> Result<(), CommonError> {
         ConfigQueue {
             nom_queue: format!("{}/{}", DOMAIN_NAME, QUEUE_ISSUE),
             routing_keys: vec![
-                ConfigRoutingExchange { routing_key: format!("requete.{}.{}", DOMAIN_NAME, COMMAND_ACTION_SIGN_CSR), exchange: Securite::L1Public },
+                ConfigRoutingExchange { routing_key: format!("commande.{}.{}", DOMAIN_NAME, COMMAND_ACTION_SIGN_CSR), exchange: Securite::L1Public },
+
+                // Events
+                ConfigRoutingExchange { routing_key: format!("evenement.{}.{}", DOMAIN_KEYMASTER, EVENT_KEYMASTER_CERTIFICATE), exchange: Securite::L1Public },
             ],
             ttl: Some(QUEUE_TTL_DEFAULT),
             durable: true,

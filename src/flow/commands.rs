@@ -10,16 +10,18 @@ use millegrilles_common_rust::millegrilles_cryptographie::x509::EnveloppeCertifi
 use millegrilles_common_rust::mongo_dao::MongoDaoTyped;
 use millegrilles_common_rust::mongodb::options::Hint;
 use millegrilles_common_rust::serde_json;
-use millegrilles_common_rust::tracing::{info, warn};
-use millegrilles_common_rust::v3::{ConfigService, PkiService};
+use millegrilles_common_rust::tracing::{debug, info, warn};
+use millegrilles_common_rust::v3::{ChiffrageService, ConfigService, PkiService};
 use millegrilles_common_rust::v3::facades::message_inbound::MessageValidated;
 use millegrilles_common_rust::v3::facades::message_outbound::MessageOutboundFacade;
 use millegrilles_common_rust::v3::models::ErrorMessage;
 use crate::constants::DOMAIN_NAME;
 use crate::flow::signing::{sign_with_certissuer, validate_csr_signature_request};
+use millegrilles_common_rust::millegrilles_cryptographie::messages_structs::MessageKind;
 
 pub async fn process_command(
     config: &dyn ConfigService,
+    chiffrage: &dyn ChiffrageService,
     outbound: &MessageOutboundFacade,
     wrapper: MessageValidated
 ) -> Result<(), CommonError> {
@@ -27,13 +29,33 @@ pub async fn process_command(
         Some(action) => action,
         None => return outbound.respond(wrapper.delivery_info, ErrorMessage::err("No action provided in command")).await
     };
-    match action {
-        COMMAND_ACTION_SIGN_CSR => sign_csr(config, outbound, wrapper).await,
+
+    match wrapper.message.kind {
+        MessageKind::Commande => {
+            match action {
+                COMMAND_ACTION_SIGN_CSR => sign_csr(config, outbound, wrapper).await,
+                _ => {
+                    info!("Unknown action {} for process_command, skipping", action);
+                    Ok(())
+                }
+            }
+        },
+        MessageKind::Evenement => {
+            match action {
+                EVENT_KEYMASTER_CERTIFICATE => save_keymaster_certificate(chiffrage, wrapper).await,
+                _ => {
+                    info!("Unknown action {} for process_command, skipping", action);
+                    Ok(())
+                }
+            }
+        },
         _ => {
-            info!("Unknown action {} for process_command, skipping", action);
+            info!("Unhandled message type with action {} for process_command, skipping", action);
             Ok(())
         }
     }
+
+
 }
 
 async fn sign_csr(
@@ -156,4 +178,15 @@ async fn save_certificate<M>(
 
     // Success
     outbound.respond(delivery_info, ErrorMessage::ok()).await
+}
+
+async fn save_keymaster_certificate(
+    chiffrage: &dyn ChiffrageService,
+    wrapper: MessageValidated,
+) -> Result<(), CommonError> {
+    debug!("Saving keymaster certificate for encryption/fiche");
+    if let Err(e) = chiffrage.add_encryption_publickey(wrapper.certificate) {
+        warn!("Error saving keymaster certificate: {:?}", e);
+    }
+    Ok(())
 }

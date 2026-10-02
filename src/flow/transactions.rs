@@ -41,7 +41,7 @@ impl PkiTransactionService {
         Self { transaction: Arc::new(service) }
     }
 
-    pub async fn process_transaction(&self, wrapper: TransactionWrapper, session: Option<&mut ClientSession>) -> Result<(), CommonError> {
+    pub async fn _process_transaction(&self, wrapper: TransactionWrapper, session: Option<&mut ClientSession>) -> Result<(), CommonError> {
         self.transaction.process_transaction(wrapper, session).await
     }
 
