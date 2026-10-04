@@ -70,12 +70,15 @@ async fn sign_csr(
         return outbound.respond(wrapper.delivery_info, ErrorMessage::err_code(401, "Request denied")).await
     }
 
-    if let Err(e) = sign_with_certissuer(config, &wrapper).await {
-        warn!("Error executing CSR signing request: {:?}", e);
-        return outbound.respond(wrapper.delivery_info, ErrorMessage::err_code(500, "Error signing CSR")).await
+    match sign_with_certissuer(config, &wrapper).await {
+        Ok(certificate) => {
+            outbound.respond(wrapper.delivery_info, certificate).await
+        },
+        Err(e) => {
+            warn!("Error signing CSR: {:?}", e);
+            outbound.respond(wrapper.delivery_info, ErrorMessage::err_code(500, "Error signing CSR")).await
+        }
     }
-
-    outbound.respond(wrapper.delivery_info, ErrorMessage::ok()).await
 }
 
 /// Process the command part of the transaction (checks, validations, volatile updates),

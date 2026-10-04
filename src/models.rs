@@ -153,3 +153,9 @@ impl TryFrom<CertificateRow> for ReponseEnveloppe {
         })
     }
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ReponseCertificatSigne {
+    pub ok: bool,
+    pub certificat: Vec<String>,
+}

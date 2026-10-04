@@ -1,7 +1,8 @@
+use crate::models::ReponseCertificatSigne;
 use millegrilles_common_rust::certificats::VerificateurPermissions;
 use millegrilles_common_rust::common_messages::DemandeSignature;
-use millegrilles_common_rust::error::Error as CommonError;
 use millegrilles_common_rust::constantes::*;
+use millegrilles_common_rust::error::Error as CommonError;
 use millegrilles_common_rust::millegrilles_cryptographie::messages_structs::MessageMilleGrillesBufferDefault;
 use millegrilles_common_rust::millegrilles_cryptographie::x509::EnveloppeCertificat;
 use millegrilles_common_rust::reqwest;
@@ -11,7 +12,7 @@ use millegrilles_common_rust::v3::facades::message_inbound::MessageValidated;
 
 pub fn validate_csr_signature_request(
     request: &DemandeSignature,
-    certificat: &EnveloppeCertificat
+    certificat: &EnveloppeCertificat,
 ) -> Result<(), CommonError> {
     if certificat.verifier_roles(vec![RolesCertificats::Instance])? {
         if certificat.verifier_exchanges(vec![Securite::L3Protege, Securite::L4Secure])? {
@@ -108,7 +109,10 @@ pub fn validate_csr_signature_request(
     Err(String::from("Acces refuse (default)"))?
 }
 
-pub async fn sign_with_certissuer(config: &dyn ConfigService, wrapper: &MessageValidated) -> Result<(), CommonError> {
+pub async fn sign_with_certissuer(
+    config: &dyn ConfigService,
+    wrapper: &MessageValidated
+) -> Result<ReponseCertificatSigne, CommonError> {
 
     let certissuer_url = match config.get_configuration_instance().certissuer_url.as_ref() {
         Some(url) => url,
@@ -125,7 +129,11 @@ pub async fn sign_with_certissuer(config: &dyn ConfigService, wrapper: &MessageV
     info!("Resquesting CSR signature from {}", url_post);
     let buffer: MessageMilleGrillesBufferDefault = (&wrapper.message).try_into()?;
     let response = client.post(url_post).body(buffer.buffer).send().await?;
-    response.error_for_status()?;
 
-    Ok(())
+    // Raise error if required
+    response.error_for_status_ref()?;
+
+    let response: ReponseCertificatSigne = response.json().await?;
+    debug!("commande_signer_csr Reponse certificat : {:?}", response);
+    Ok(response)
 }
