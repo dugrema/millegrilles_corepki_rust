@@ -159,3 +159,13 @@ pub struct ReponseCertificatSigne {
     pub ok: bool,
     pub certificat: Vec<String>,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CommandSignUserCsr {
+    pub nom_usager: String,
+    pub user_id: String,
+    pub csr: String,
+    pub delegation_globale: Option<String>,
+    pub compte_prive: Option<bool>,
+    pub delegations_version: Option<usize>,
+}

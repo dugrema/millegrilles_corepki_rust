@@ -137,3 +137,32 @@ pub async fn sign_with_certissuer(
     debug!("commande_signer_csr Reponse certificat : {:?}", response);
     Ok(response)
 }
+
+pub async fn sign_user_with_certissuer(
+    config: &dyn ConfigService,
+    wrapper: &MessageValidated
+) -> Result<ReponseCertificatSigne, CommonError> {
+
+    let certissuer_url = match config.get_configuration_instance().certissuer_url.as_ref() {
+        Some(url) => url,
+        None => return Err(CommonError::Str("Certissuer URL is not defined"))
+    };
+
+    let client = reqwest::Client::builder()
+        .timeout(core::time::Duration::new(7, 0))
+        .build()?;
+
+    let mut url_post = certissuer_url.clone();
+    url_post.set_path("signerUsager");
+
+    info!("Resquesting CSR signature from {}", url_post);
+    let buffer: MessageMilleGrillesBufferDefault = (&wrapper.message).try_into()?;
+    let response = client.post(url_post).body(buffer.buffer).send().await?;
+
+    // Raise error if required
+    response.error_for_status_ref()?;
+
+    let response: ReponseCertificatSigne = response.json().await?;
+    debug!("commande_signer_csr Reponse certificat : {:?}", response);
+    Ok(response)
+}

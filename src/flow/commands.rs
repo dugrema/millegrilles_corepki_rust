@@ -1,8 +1,9 @@
 use crate::external::mongo::*;
 use crate::external::mq::*;
 use crate::flow::transactions::PkiTransactionService;
-use crate::models::{CommandSaveCertificate, TransactionCertificat};
+use crate::models::{CommandSaveCertificate, CommandSignUserCsr, TransactionCertificat};
 use millegrilles_common_rust::bson::doc;
+use millegrilles_common_rust::certificats::VerificateurPermissions;
 use millegrilles_common_rust::common_messages::DemandeSignature;
 use millegrilles_common_rust::constantes::*;
 use millegrilles_common_rust::error::Error as CommonError;
@@ -16,7 +17,7 @@ use millegrilles_common_rust::v3::facades::message_inbound::MessageValidated;
 use millegrilles_common_rust::v3::facades::message_outbound::MessageOutboundFacade;
 use millegrilles_common_rust::v3::models::ErrorMessage;
 use crate::constants::DOMAIN_NAME;
-use crate::flow::signing::{sign_with_certissuer, validate_csr_signature_request};
+use crate::flow::signing::{sign_user_with_certissuer, sign_with_certissuer, validate_csr_signature_request};
 use millegrilles_common_rust::millegrilles_cryptographie::messages_structs::MessageKind;
 
 pub async fn process_command(
@@ -34,6 +35,7 @@ pub async fn process_command(
         MessageKind::Commande => {
             match action {
                 COMMAND_ACTION_SIGN_CSR => sign_csr(config, outbound, wrapper).await,
+                COMMAND_ACTION_SIGN_USER_CSR => sign_user_csr(config, outbound, wrapper).await,
                 _ => {
                     info!("Unknown action {} for process_command, skipping", action);
                     Ok(())
@@ -192,4 +194,36 @@ async fn save_keymaster_certificate(
         warn!("Error saving keymaster certificate: {:?}", e);
     }
     Ok(())
+}
+
+pub async fn sign_user_csr(
+    config: &dyn ConfigService,
+    outbound: &MessageOutboundFacade,
+    wrapper: MessageValidated,
+) -> Result<(), CommonError> {
+    if ! wrapper.certificate.verifier_domaines(vec![DOMAINE_NOM_MAITREDESCOMPTES.to_string()])? ||
+        ! wrapper.certificate.verifier_exchanges(vec![Securite::L4Secure])?
+    {
+        warn!("Access denied on a user CSR signing request");
+        return outbound.respond(wrapper.delivery_info, ErrorMessage::err_code(401, "Request denied")).await
+    }
+
+    // Validate command structure by parsing
+    let _command: CommandSignUserCsr = match wrapper.message.deserialize() {
+        Ok(command) => command,
+        Err(e) => {
+            warn!("Bad command formatting on a user CSR signing request: {:?}", e);
+            return outbound.respond(wrapper.delivery_info, ErrorMessage::err_code(400, "Bad request")).await
+        }
+    };
+
+    match sign_user_with_certissuer(config, &wrapper).await {
+        Ok(certificate) => {
+            outbound.respond(wrapper.delivery_info, certificate).await
+        },
+        Err(e) => {
+            warn!("Error signing CSR: {:?}", e);
+            outbound.respond(wrapper.delivery_info, ErrorMessage::err_code(500, "Error signing CSR")).await
+        }
+    }
 }
