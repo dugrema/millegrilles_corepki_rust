@@ -21,7 +21,12 @@ use millegrilles_common_rust::v3::impls::format_service::FormatServiceImpl;
 use millegrilles_common_rust::v3::impls::messaging_service::MessagingServiceImpl;
 use millegrilles_common_rust::v3::impls::security_service::SecurityServiceImpl;
 use millegrilles_common_rust::v3::{ChiffrageService, ConfigService};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use millegrilles_common_rust::constantes::{Securite, DOMAINE_TOPOLOGIE};
+use millegrilles_common_rust::generateur_messages::RoutageMessageAction;
+use crate::constants::{CONFIG_TOPOLOGY_CERTISSUER_PKI, REQUEST_TOPOLOGY_PROPERTIES};
+use crate::flow::signing::{refresh_signing, SigningState};
+use crate::models::RequestTopologyConfiguration;
 
 pub struct AppContext {
     pub join_set: JoinSet<()>,
@@ -62,6 +67,8 @@ impl AppContext {
 
         let filehost = Arc::new(FilehostServiceImpl::new(config.clone(), format.clone(), outbound.clone()));
 
+        let signing_state = SigningState::new(config.as_ref())?;
+
         // List data tables (excluding redolog and tracking). They get truncated on restore (when not resuming).
         let data_tables = vec![
             COLLECTION_NAME_CERTIFICATES.to_string(),
@@ -85,6 +92,7 @@ impl AppContext {
             transaction.clone(),
             mongo.clone(),
             backup.clone(),
+            signing_state,
         ));
 
         info!("Configure middleware resources : queues, index, tables, ...");
@@ -103,6 +111,9 @@ impl AppContext {
             cli.noresume,
             master_key,
         ).await?;
+
+        // Initialize values from topology configuration files when applicable
+        app_service.refresh_signing().await;
 
         Ok(AppContext {
             join_set,

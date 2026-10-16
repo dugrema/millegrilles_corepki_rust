@@ -1,3 +1,4 @@
+use std::sync::Mutex;
 use crate::external::mongo::*;
 use crate::external::mq::*;
 use crate::flow::transactions::PkiTransactionService;
@@ -17,11 +18,11 @@ use millegrilles_common_rust::v3::facades::message_inbound::MessageValidated;
 use millegrilles_common_rust::v3::facades::message_outbound::MessageOutboundFacade;
 use millegrilles_common_rust::v3::models::ErrorMessage;
 use crate::constants::DOMAIN_NAME;
-use crate::flow::signing::{sign_user_with_certissuer, sign_with_certissuer, validate_csr_signature_request};
+use crate::flow::signing::{sign_user_with_certissuer, sign_with_certissuer, validate_csr_signature_request, SigningState};
 use millegrilles_common_rust::millegrilles_cryptographie::messages_structs::MessageKind;
 
 pub async fn process_command(
-    config: &dyn ConfigService,
+    signing_state: &Mutex<SigningState>,
     chiffrage: &dyn ChiffrageService,
     outbound: &MessageOutboundFacade,
     wrapper: MessageValidated
@@ -34,8 +35,8 @@ pub async fn process_command(
     match wrapper.message.kind {
         MessageKind::Commande => {
             match action {
-                COMMAND_ACTION_SIGN_CSR => sign_csr(config, outbound, wrapper).await,
-                COMMAND_ACTION_SIGN_USER_CSR => sign_user_csr(config, outbound, wrapper).await,
+                COMMAND_ACTION_SIGN_CSR => sign_csr(signing_state, outbound, wrapper).await,
+                COMMAND_ACTION_SIGN_USER_CSR => sign_user_csr(signing_state, outbound, wrapper).await,
                 _ => {
                     info!("Unknown action {} for process_command, skipping", action);
                     Ok(())
@@ -61,7 +62,7 @@ pub async fn process_command(
 }
 
 async fn sign_csr(
-    config: &dyn ConfigService,
+    signing_state: &Mutex<SigningState>,
     outbound: &MessageOutboundFacade,
     wrapper: MessageValidated,
 ) -> Result<(), CommonError> {
@@ -72,7 +73,7 @@ async fn sign_csr(
         return outbound.respond(wrapper.delivery_info, ErrorMessage::err_code(401, "Request denied")).await
     }
 
-    match sign_with_certissuer(config, &wrapper).await {
+    match sign_with_certissuer(signing_state, &wrapper).await {
         Ok(certificate) => {
             outbound.respond(wrapper.delivery_info, certificate).await
         },
@@ -197,7 +198,7 @@ async fn save_keymaster_certificate(
 }
 
 pub async fn sign_user_csr(
-    config: &dyn ConfigService,
+    signing_state: &Mutex<SigningState>,
     outbound: &MessageOutboundFacade,
     wrapper: MessageValidated,
 ) -> Result<(), CommonError> {
@@ -217,7 +218,7 @@ pub async fn sign_user_csr(
         }
     };
 
-    match sign_user_with_certissuer(config, &wrapper).await {
+    match sign_user_with_certissuer(signing_state, &wrapper).await {
         Ok(certificate) => {
             outbound.respond(wrapper.delivery_info, certificate).await
         },

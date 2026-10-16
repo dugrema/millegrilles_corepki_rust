@@ -1,20 +1,116 @@
-use crate::models::ReponseCertificatSigne;
+use std::sync::{Arc, Mutex};
+use crate::models::{ReponseCertificatSigne, RequestTopologyConfiguration, ResponseConfigurationGetProperties};
 use millegrilles_common_rust::certificats::VerificateurPermissions;
 use millegrilles_common_rust::common_messages::DemandeSignature;
 use millegrilles_common_rust::constantes::*;
 use millegrilles_common_rust::error::Error as CommonError;
+use millegrilles_common_rust::generateur_messages::RoutageMessageAction;
+use millegrilles_common_rust::jwt_simple::prelude::Deserialize;
 use millegrilles_common_rust::millegrilles_cryptographie::messages_structs::MessageMilleGrillesBufferDefault;
 use millegrilles_common_rust::millegrilles_cryptographie::x509::EnveloppeCertificat;
 use millegrilles_common_rust::reqwest;
+use millegrilles_common_rust::serde_json::Value;
 use millegrilles_common_rust::tracing::{debug, error, info, warn};
 use millegrilles_common_rust::v3::ConfigService;
 use millegrilles_common_rust::v3::facades::message_inbound::MessageValidated;
+use millegrilles_common_rust::v3::facades::message_outbound::MessageOutboundFacade;
+use millegrilles_common_rust::millegrilles_cryptographie::messages_structs::MessageKind;
+use millegrilles_common_rust::url::Url;
+use crate::constants::*;
 
 pub const USER_CERTIFICATE_PERIOD_DEFAULT: u64 = 86_400 * 183;  // 6 months
 
-struct SigningState {
-    /// Duration of validity of a user certificate
-    user_certificate_period: Option<u64>,
+#[derive(Clone, Debug)]
+pub struct SigningState {
+    /// Duration (days) of validity of a user certificate
+    user_certificate_period_days: u64,
+    /// List of urls used to connect to certissuer
+    certissuer_urls: Vec<Url>
+}
+
+impl SigningState {
+    pub fn new(config: &dyn ConfigService) -> Result<Self, CommonError> {
+        let certissuer_urls = match config.get_configuration_instance().certissuer_url.as_ref() {
+            Some(url) => vec![url.clone()],
+            None => vec![]
+        };
+
+        Ok(Self {
+            user_certificate_period_days: USER_CERTIFICATE_PERIOD_DEFAULT,
+            certissuer_urls
+        })
+    }
+}
+
+pub async fn refresh_signing(
+    state: &Mutex<SigningState>,
+    config: &dyn ConfigService,
+    outbound: &MessageOutboundFacade
+) -> Result<(), CommonError> {
+    debug!("Refreshing signing configuration from Topology files");
+
+    // This method is called early during connection, ensure reply_q is ready.
+    outbound.wait_ready(Some(5_000)).await?;
+
+    // Load user certificate parameters
+    let routing_config = RoutageMessageAction::builder(
+        DOMAINE_TOPOLOGIE,
+        REQUEST_TOPOLOGY_PROPERTIES,
+        vec![Securite::L1Public]
+    ).build();
+    let request_config = RequestTopologyConfiguration { filename: CONFIG_TOPOLOGY_CERTISSUER_PKI.to_string() };
+    let response_config = outbound.send_request(routing_config, request_config).await?;
+    if response_config.message.kind != MessageKind::ReponseChiffree {
+        if let (true, error) = response_config.is_err()? {
+            info!("Certissuer configuration {} not defined: {:?}", REQUEST_TOPOLOGY_PROPERTIES, error);
+            return Ok(())
+        }
+    }
+
+    // We received configuration propertys
+    info!("Configuration properties raw response content:\n{:?}", response_config.message.contenu);
+    let private_key = config.get_configuration_pki().get_enveloppe_privee();
+    let configuration: ResponseConfigurationGetProperties = response_config.message.dechiffrer(private_key.as_ref())?;
+    info!("Configuration values:\n{:?}", configuration);
+    let values = configuration.map_values();
+
+    // Update certissuer urls
+    if let Some(urls) = values.get(CONFIG_TOPOLOGY_CERTISSUER_URLS) {
+        if let Some(urls) = urls.value.text.as_ref() {
+            let mut config_url = match config.get_configuration_instance().certissuer_url.as_ref() {
+                Some(url) => vec![url.clone()],
+                None => vec![]
+            };
+
+            // let mut config_url = Vec::with_capacity(5);
+            for url in urls.split(",") {
+                match Url::parse(url) {
+                    Ok(url) => config_url.push(url),
+                    Err(e) => {
+                        warn!("Error parsing certissuer url {}, ignoring", e);
+                    }
+                }
+            }
+
+            if ! config_url.is_empty() {
+                debug!("Update certissuer urls to {:?}", config_url);
+                let mut guard = state.lock().expect("Failed to lock mutex");
+                guard.certissuer_urls = config_url;
+            }
+        }
+    }
+
+    // Update user validity period
+    if let Some(period) = values.get(CONFIG_TOPOLOGY_CERTISSUER_USER_PERIOD_DAYS) {
+        if let Some(period_days) = period.value.inumber {
+            debug!("Update user validity period to {} days", period_days);
+            let period_seconds = 86_400 * period_days;
+            let mut guard = state.lock().expect("Failed to lock mutex");
+            guard.user_certificate_period_days = period_seconds as u64;
+        }
+    }
+
+    Ok(())
 }
 
 pub fn validate_csr_signature_request(
@@ -117,59 +213,96 @@ pub fn validate_csr_signature_request(
 }
 
 pub async fn sign_with_certissuer(
-    config: &dyn ConfigService,
+    signing_state: &Mutex<SigningState>,
     wrapper: &MessageValidated
 ) -> Result<ReponseCertificatSigne, CommonError> {
-
-    let certissuer_url = match config.get_configuration_instance().certissuer_url.as_ref() {
-        Some(url) => url,
-        None => return Err(CommonError::Str("Certissuer URL is not defined"))
+    let certissuer_urls = {
+        let guard = signing_state.lock().expect("Failed to lock signing_state");
+        guard.certissuer_urls.clone()
     };
 
-    let client = reqwest::Client::builder()
-        .timeout(core::time::Duration::new(7, 0))
-        .build()?;
+    if certissuer_urls.is_empty() {
+        return Err(CommonError::Str("No certissuer URLs are defined"))
+    }
 
-    let mut url_post = certissuer_url.clone();
-    url_post.set_path("signerModule");
+    for certissuer_url in certissuer_urls {
+        let client = reqwest::Client::builder()
+            .timeout(core::time::Duration::new(7, 0))
+            .build()?;
 
-    info!("Resquesting CSR signature from {}", url_post);
-    let buffer: MessageMilleGrillesBufferDefault = (&wrapper.message).try_into()?;
-    let response = client.post(url_post).body(buffer.buffer).send().await?;
+        let mut url_post = certissuer_url.clone();
+        url_post.set_path("signerModule");
 
-    // Raise error if required
-    response.error_for_status_ref()?;
+        info!("Resquesting CSR signature from {}", url_post);
+        let buffer: MessageMilleGrillesBufferDefault = (&wrapper.message).try_into()?;
+        let response = match client.post(url_post).body(buffer.buffer).send().await {
+            Ok(response) => {
+                // Raise error if required
+                if let Err(e) = response.error_for_status_ref() {
+                    error!("Error signing with certissuer: {:?}", e);
+                    continue  // Attempt next url
+                }
+                response
+            },
+            Err(e) => {
+                error!("Error signing with certissuer: {:?}", e);
+                continue  // Attempt next url
+            }
+        };
 
-    let response: ReponseCertificatSigne = response.json().await?;
-    debug!("commande_signer_csr Reponse certificat : {:?}", response);
-    Ok(response)
+        let response: ReponseCertificatSigne = response.json().await?;
+        debug!("commande_signer_csr Reponse certificat : {:?}", response);
+        return Ok(response)
+    }
+
+    Err(CommonError::Str("All signature attempts with certissuers failed"))
 }
 
 pub async fn sign_user_with_certissuer(
-    config: &dyn ConfigService,
+    signing_state: &Mutex<SigningState>,
     wrapper: &MessageValidated
 ) -> Result<ReponseCertificatSigne, CommonError> {
 
-    let certissuer_url = match config.get_configuration_instance().certissuer_url.as_ref() {
-        Some(url) => url,
-        None => return Err(CommonError::Str("Certissuer URL is not defined"))
+    let certissuer_urls = {
+        let guard = signing_state.lock().expect("Failed to lock signing_state");
+        guard.certissuer_urls.clone()
     };
 
-    let client = reqwest::Client::builder()
-        .timeout(core::time::Duration::new(7, 0))
-        .build()?;
+    if certissuer_urls.is_empty() {
+        return Err(CommonError::Str("No certissuer URLs are defined"))
+    }
 
-    let mut url_post = certissuer_url.clone();
-    url_post.set_path("signerUsager");
+    debug!("Attempting to sigue user certificate with certissuers: {:?}", certissuer_urls);
 
-    info!("Resquesting CSR signature from {}", url_post);
-    let buffer: MessageMilleGrillesBufferDefault = (&wrapper.message).try_into()?;
-    let response = client.post(url_post).body(buffer.buffer).send().await?;
+    for certissuer_url in certissuer_urls {
+        let client = reqwest::Client::builder()
+            .timeout(core::time::Duration::new(7, 0))
+            .build()?;
 
-    // Raise error if required
-    response.error_for_status_ref()?;
+        let mut url_post = certissuer_url.clone();
+        url_post.set_path("signerUsager");
 
-    let response: ReponseCertificatSigne = response.json().await?;
-    debug!("commande_signer_csr Reponse certificat : {:?}", response);
-    Ok(response)
+        info!("Resquesting CSR signature from {}", url_post);
+        let buffer: MessageMilleGrillesBufferDefault = (&wrapper.message).try_into()?;
+        let response = match client.post(url_post).body(buffer.buffer).send().await {
+            Ok(response) => {
+                // Raise error if required
+                if let Err(e) = response.error_for_status_ref() {
+                    error!("Error signing with certissuer: {:?}", e);
+                    continue  // Attempt next url
+                }
+                response
+            },
+            Err(e) => {
+                error!("Error signing with certissuer: {:?}", e);
+                continue  // Attempt next url
+            }
+        };
+
+        let response: ReponseCertificatSigne = response.json().await?;
+        debug!("commande_signer_csr Reponse certificat : {:?}", response);
+        return Ok(response)
+    }
+
+    Err(CommonError::Str("All signature attempts with certissuers failed"))
 }

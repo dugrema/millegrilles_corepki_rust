@@ -5,6 +5,7 @@ use millegrilles_common_rust::millegrilles_cryptographie::x509::EnveloppeCertifi
 use millegrilles_common_rust::serde::{Serialize, Deserialize};
 use millegrilles_common_rust::error::Error as CommonError;
 use millegrilles_common_rust::bson::serde_helpers::datetime::FromChrono04DateTime;
+use millegrilles_common_rust::chrono::serde::ts_milliseconds;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TransactionCertificat {
@@ -168,4 +169,70 @@ pub struct CommandSignUserCsr {
     pub delegation_globale: Option<String>,
     pub compte_prive: Option<bool>,
     pub delegations_version: Option<usize>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct RequestTopologyConfiguration { pub filename: String }
+
+/// Decrypted content of the configuration property value field.
+#[derive(Clone, Debug, Deserialize)]
+pub struct ConfigurationValue {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inumber: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fnumber: Option<f64>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ConfigurationProperty {
+    pub file_id: String,
+    /// Name of this property
+    pub key: String,
+    /// Values
+    pub value: ConfigurationValue,
+    #[serde(with="ts_milliseconds")]
+    pub last_modified: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ResponseConfigurationGetProperties {
+    pub file_id: String,
+    pub filename: String,
+    /// Roles, sent for admin requests (when key requested)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub roles: Option<Vec<String>>,
+    /// Domains, sent for admin requests (when key requested)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub domains: Option<Vec<String>>,
+    /// Decryption key id (keymaster ref)
+    pub key_id: String,
+    /// Last modification of either file or any properties in the list
+    #[serde(with="ts_milliseconds")]
+    pub last_modified: DateTime<Utc>,
+    /// Decrypted properties
+    pub list: Vec<ConfigurationProperty>,
+    /// Contains the unencrypted secret key.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secret_key: Option<String>,
+    /// False if all properties have not been returned
+    pub done: bool,
+}
+
+impl ResponseConfigurationGetProperties {
+    pub fn map_values(&self) -> HashMap<&str, &ConfigurationProperty> {
+        let mut map = HashMap::new();
+        for property in self.list.iter() {
+            map.insert(property.key.as_str(), property);
+        }
+        map
+    }
+}
+
+#[derive(Deserialize)]
+pub struct ConfigurationFileEvent {
+    pub file_id: String,
+    pub filename: String,
+    pub event: Option<String>,
 }

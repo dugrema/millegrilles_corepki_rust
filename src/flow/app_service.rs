@@ -14,12 +14,13 @@ use millegrilles_common_rust::v3::facades::message_outbound::MessageOutboundFaca
 use millegrilles_common_rust::v3::impls::backup_restorer::RestorationState;
 use millegrilles_common_rust::v3::impls::messaging_service::MessagingServiceImpl;
 use millegrilles_common_rust::v3::{BackupService, ChiffrageService, ConfigService, PkiService};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use crate::flow::backup::process_backup;
 use crate::flow::commands::{process_command, process_transaction};
 use crate::flow::events::process_events;
 use crate::flow::maintenance::process_ticker_job;
 use crate::flow::requests::process_request;
+use crate::flow::signing::{refresh_signing, SigningState};
 use crate::flow::transactions::PkiTransactionService;
 
 /// Handles queue consumer threads, calls individual routing methods
@@ -31,6 +32,7 @@ pub struct ApplicationService {
     transaction: Arc<PkiTransactionService>,
     mongo: Arc<MongoDaoImpl>,
     backup: Arc<dyn BackupService>,
+    signing_state: Arc<Mutex<SigningState>>,
 }
 
 impl ApplicationService {
@@ -42,6 +44,7 @@ impl ApplicationService {
         transaction: Arc<PkiTransactionService>,
         mongo: Arc<MongoDaoImpl>,
         backup: Arc<dyn BackupService>,
+        signing_state: SigningState,
     ) -> Self {
         Self {
             pki,
@@ -51,6 +54,7 @@ impl ApplicationService {
             transaction,
             mongo,
             backup,
+            signing_state: Arc::new(Mutex::new(signing_state)),
         }
     }
 
@@ -66,7 +70,7 @@ impl ApplicationService {
         let self_clone = self.clone();
         let incoming_clone = incoming.clone();
         join_set.spawn(async move {self_clone.process_ticker_thread(incoming_clone).await});
-        
+
         let self_clone = self.clone();
         let incoming_clone = incoming.clone();
         join_set.spawn(async move {self_clone.process_events_thread(incoming_clone).await});
@@ -123,7 +127,10 @@ impl ApplicationService {
             match result {
                 Ok(message) => {
                     if let Err(e) = process_events(
-                        message
+                        self.signing_state.as_ref(),
+                        self.config.as_ref(),
+                        self.outbound.as_ref(),
+                        message,
                     ).await {
                         error!("Ticker job failed: {}", e);
                     }
@@ -172,7 +179,7 @@ impl ApplicationService {
                 Ok(message) => {
                     let routing = message.message.routage.clone();
                     if let Err(e) = process_command(
-                        self.config.as_ref(),
+                        self.signing_state.as_ref(),
                         self.chiffrage.as_ref(),
                         self.outbound.as_ref(),
                         message
@@ -262,6 +269,12 @@ impl ApplicationService {
         info!("restore_domain duration: {} ms", duration.num_milliseconds());
 
         Ok(result)
+    }
+
+    pub async fn refresh_signing(&self) {
+        if let Err(e) = refresh_signing(self.signing_state.as_ref(), self.config.as_ref(), self.outbound.as_ref()).await {
+            error!("Error refreshing signing configuration: {}", e);
+        }
     }
 
 }
