@@ -61,7 +61,6 @@ pub async fn refresh_signing(
     }
 
     // We received configuration propertys
-    info!("Configuration properties raw response content:\n{:?}", response_config.message.contenu);
     let private_key = config.get_configuration_pki().get_enveloppe_privee();
     let configuration: ResponseConfigurationGetProperties = response_config.message.dechiffrer(private_key.as_ref())?;
     info!("Configuration values:\n{:?}", configuration);
