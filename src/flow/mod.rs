@@ -6,3 +6,4 @@ mod commands;
 mod backup;
 mod requests;
 mod signing;
+mod events;

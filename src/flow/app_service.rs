@@ -17,6 +17,7 @@ use millegrilles_common_rust::v3::{BackupService, ChiffrageService, ConfigServic
 use std::sync::Arc;
 use crate::flow::backup::process_backup;
 use crate::flow::commands::{process_command, process_transaction};
+use crate::flow::events::process_events;
 use crate::flow::maintenance::process_ticker_job;
 use crate::flow::requests::process_request;
 use crate::flow::transactions::PkiTransactionService;
@@ -65,6 +66,10 @@ impl ApplicationService {
         let self_clone = self.clone();
         let incoming_clone = incoming.clone();
         join_set.spawn(async move {self_clone.process_ticker_thread(incoming_clone).await});
+        
+        let self_clone = self.clone();
+        let incoming_clone = incoming.clone();
+        join_set.spawn(async move {self_clone.process_events_thread(incoming_clone).await});
 
         let self_clone = self.clone();
         let incoming_clone = incoming.clone();
@@ -108,7 +113,29 @@ impl ApplicationService {
         }
         debug!("process_ticker_thread Closed");
     }
-    
+
+    async fn process_events_thread(&self, incoming: Arc<MessageInboundValidator>) {
+        let streamer = incoming
+            .consume_named_queue(QUEUE_EVENTS)
+            .expect("Consumer streaming init failed");
+        tokio::pin!(streamer);
+        while let Some(result) = streamer.next().await {
+            match result {
+                Ok(message) => {
+                    if let Err(e) = process_events(
+                        message
+                    ).await {
+                        error!("Ticker job failed: {}", e);
+                    }
+                }
+                Err(e) => {
+                    error!("Error processing ticker message: {}", e);
+                }
+            }
+        }
+        debug!("process_ticker_thread Closed");
+    }
+
     // Requests
     async fn process_requests_thread(&self, incoming: Arc<MessageInboundValidator>) {
         let streamer = incoming.consume_named_queue(

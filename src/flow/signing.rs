@@ -10,6 +10,13 @@ use millegrilles_common_rust::tracing::{debug, error, info, warn};
 use millegrilles_common_rust::v3::ConfigService;
 use millegrilles_common_rust::v3::facades::message_inbound::MessageValidated;
 
+pub const USER_CERTIFICATE_PERIOD_DEFAULT: u64 = 86_400 * 183;  // 6 months
+
+struct SigningState {
+    /// Duration of validity of a user certificate
+    user_certificate_period: Option<u64>,
+}
+
 pub fn validate_csr_signature_request(
     request: &DemandeSignature,
     certificat: &EnveloppeCertificat,
