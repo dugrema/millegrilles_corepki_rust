@@ -176,6 +176,7 @@ pub struct RequestTopologyConfiguration { pub filename: String }
 
 /// Decrypted content of the configuration property value field.
 #[derive(Clone, Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct ConfigurationValue {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
@@ -186,6 +187,7 @@ pub struct ConfigurationValue {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct ConfigurationProperty {
     pub file_id: String,
     /// Name of this property
@@ -197,6 +199,7 @@ pub struct ConfigurationProperty {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct ResponseConfigurationGetProperties {
     pub file_id: String,
     pub filename: String,
@@ -231,6 +234,7 @@ impl ResponseConfigurationGetProperties {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 pub struct ConfigurationFileEvent {
     pub file_id: String,
     pub filename: String,

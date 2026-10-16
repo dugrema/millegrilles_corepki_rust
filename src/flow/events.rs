@@ -1,13 +1,13 @@
-use std::sync::{Arc, Mutex};
+use crate::constants::CONFIG_TOPOLOGY_CERTISSUER_PKI;
 use crate::external::mq::*;
-use crate::models::{ConfigurationFileEvent, RequestCertificate};
+use crate::flow::signing::{SigningState, refresh_signing};
+use crate::models::ConfigurationFileEvent;
 use millegrilles_common_rust::error::Error as CommonError;
 use millegrilles_common_rust::tracing::info;
 use millegrilles_common_rust::v3::ConfigService;
 use millegrilles_common_rust::v3::facades::message_inbound::MessageValidated;
 use millegrilles_common_rust::v3::facades::message_outbound::MessageOutboundFacade;
-use crate::constants::CONFIG_TOPOLOGY_CERTISSUER_PKI;
-use crate::flow::signing::{refresh_signing, SigningState};
+use std::sync::Mutex;
 
 pub async fn process_events(
     signing_state: &Mutex<SigningState>,

@@ -1,6 +1,7 @@
-use std::sync::Mutex;
+use crate::constants::DOMAIN_NAME;
 use crate::external::mongo::*;
 use crate::external::mq::*;
+use crate::flow::signing::{SigningState, sign_user_with_certissuer, sign_with_certissuer, validate_csr_signature_request};
 use crate::flow::transactions::PkiTransactionService;
 use crate::models::{CommandSaveCertificate, CommandSignUserCsr, TransactionCertificat};
 use millegrilles_common_rust::bson::doc;
@@ -8,18 +9,17 @@ use millegrilles_common_rust::certificats::VerificateurPermissions;
 use millegrilles_common_rust::common_messages::DemandeSignature;
 use millegrilles_common_rust::constantes::*;
 use millegrilles_common_rust::error::Error as CommonError;
+use millegrilles_common_rust::millegrilles_cryptographie::messages_structs::MessageKind;
 use millegrilles_common_rust::millegrilles_cryptographie::x509::EnveloppeCertificat;
 use millegrilles_common_rust::mongo_dao::MongoDaoTyped;
 use millegrilles_common_rust::mongodb::options::Hint;
 use millegrilles_common_rust::serde_json;
 use millegrilles_common_rust::tracing::{debug, info, warn};
-use millegrilles_common_rust::v3::{ChiffrageService, ConfigService, PkiService};
 use millegrilles_common_rust::v3::facades::message_inbound::MessageValidated;
 use millegrilles_common_rust::v3::facades::message_outbound::MessageOutboundFacade;
 use millegrilles_common_rust::v3::models::ErrorMessage;
-use crate::constants::DOMAIN_NAME;
-use crate::flow::signing::{sign_user_with_certissuer, sign_with_certissuer, validate_csr_signature_request, SigningState};
-use millegrilles_common_rust::millegrilles_cryptographie::messages_structs::MessageKind;
+use millegrilles_common_rust::v3::{ChiffrageService, PkiService};
+use std::sync::Mutex;
 
 pub async fn process_command(
     signing_state: &Mutex<SigningState>,

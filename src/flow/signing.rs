@@ -1,29 +1,23 @@
-use std::sync::{Arc, Mutex};
+use crate::constants::*;
 use crate::models::{ReponseCertificatSigne, RequestTopologyConfiguration, ResponseConfigurationGetProperties};
 use millegrilles_common_rust::certificats::VerificateurPermissions;
 use millegrilles_common_rust::common_messages::DemandeSignature;
 use millegrilles_common_rust::constantes::*;
 use millegrilles_common_rust::error::Error as CommonError;
 use millegrilles_common_rust::generateur_messages::RoutageMessageAction;
-use millegrilles_common_rust::jwt_simple::prelude::Deserialize;
+use millegrilles_common_rust::millegrilles_cryptographie::messages_structs::MessageKind;
 use millegrilles_common_rust::millegrilles_cryptographie::messages_structs::MessageMilleGrillesBufferDefault;
 use millegrilles_common_rust::millegrilles_cryptographie::x509::EnveloppeCertificat;
 use millegrilles_common_rust::reqwest;
-use millegrilles_common_rust::serde_json::Value;
 use millegrilles_common_rust::tracing::{debug, error, info, warn};
+use millegrilles_common_rust::url::Url;
 use millegrilles_common_rust::v3::ConfigService;
 use millegrilles_common_rust::v3::facades::message_inbound::MessageValidated;
 use millegrilles_common_rust::v3::facades::message_outbound::MessageOutboundFacade;
-use millegrilles_common_rust::millegrilles_cryptographie::messages_structs::MessageKind;
-use millegrilles_common_rust::url::Url;
-use crate::constants::*;
-
-pub const USER_CERTIFICATE_PERIOD_DEFAULT: u64 = 86_400 * 183;  // 6 months
+use std::sync::Mutex;
 
 #[derive(Clone, Debug)]
 pub struct SigningState {
-    /// Duration (days) of validity of a user certificate
-    user_certificate_period_days: u64,
     /// List of urls used to connect to certissuer
     certissuer_urls: Vec<Url>
 }
@@ -36,7 +30,6 @@ impl SigningState {
         };
 
         Ok(Self {
-            user_certificate_period_days: USER_CERTIFICATE_PERIOD_DEFAULT,
             certissuer_urls
         })
     }
@@ -97,16 +90,6 @@ pub async fn refresh_signing(
                 let mut guard = state.lock().expect("Failed to lock mutex");
                 guard.certissuer_urls = config_url;
             }
-        }
-    }
-
-    // Update user validity period
-    if let Some(period) = values.get(CONFIG_TOPOLOGY_CERTISSUER_USER_PERIOD_DAYS) {
-        if let Some(period_days) = period.value.inumber {
-            debug!("Update user validity period to {} days", period_days);
-            let period_seconds = 86_400 * period_days;
-            let mut guard = state.lock().expect("Failed to lock mutex");
-            guard.user_certificate_period_days = period_seconds as u64;
         }
     }
 
@@ -251,7 +234,7 @@ pub async fn sign_with_certissuer(
         };
 
         let response: ReponseCertificatSigne = response.json().await?;
-        debug!("commande_signer_csr Reponse certificat : {:?}", response);
+        debug!("sign_with_certissuer successful : {:?}", response);
         return Ok(response)
     }
 
@@ -300,7 +283,7 @@ pub async fn sign_user_with_certissuer(
         };
 
         let response: ReponseCertificatSigne = response.json().await?;
-        debug!("commande_signer_csr Reponse certificat : {:?}", response);
+        debug!("sign_user_with_certissuer successful : {:?}", response);
         return Ok(response)
     }
 
