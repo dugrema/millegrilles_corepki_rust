@@ -8,7 +8,7 @@ use millegrilles_common_rust::openssl::pkey::{PKey, Private};
 use millegrilles_common_rust::tokio;
 use millegrilles_common_rust::tokio::task::JoinSet;
 use millegrilles_common_rust::tokio_stream::StreamExt;
-use millegrilles_common_rust::tracing::{debug, error, info, warn};
+use millegrilles_common_rust::tracing::{debug, error, info};
 use millegrilles_common_rust::v3::facades::message_inbound::MessageInboundValidator;
 use millegrilles_common_rust::v3::facades::message_outbound::MessageOutboundFacade;
 use millegrilles_common_rust::v3::impls::backup_restorer::RestorationState;
@@ -268,15 +268,13 @@ impl ApplicationService {
     async fn maintenance_thread(&self) {
         // Wait for connection to be ready before starting maintenance
         self.outbound.wait_ready(None).await.ok();
-        warn!("maintenance thread starting");
+        debug!("maintenance thread starting");
 
         loop {
             tokio::time::sleep(Duration::from_mins(1)).await;
-            debug!("maintenance_thread running");
             if let Err(e) = process_maintenance(self.config.as_ref(), self.outbound.as_ref(), self.signing_state.as_ref()).await {
                 error!("Maintenance failed: {}", e);
             }
-            debug!("maintenance_thread done");
         }
     }
 
