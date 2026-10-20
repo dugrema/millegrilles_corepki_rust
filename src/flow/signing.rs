@@ -235,13 +235,13 @@ pub async fn sign_with_certissuer(
             Ok(response) => {
                 // Raise error if required
                 if let Err(e) = response.error_for_status_ref() {
-                    error!("Error signing with certissuer: {:?}", e);
+                    info!("Error status {} signing with certissuer: {:?}", response.status(), e);
                     continue  // Attempt next url
                 }
                 response
             },
             Err(e) => {
-                error!("Error signing with certissuer: {:?}", e);
+                info!("Error signing with certissuer: {:?}", e);
                 continue  // Attempt next url
             }
         };
@@ -284,13 +284,13 @@ pub async fn sign_user_with_certissuer(
             Ok(response) => {
                 // Raise error if required
                 if let Err(e) = response.error_for_status_ref() {
-                    error!("Error signing with certissuer: {:?}", e);
+                    info!("Error status {} signing with certissuer: {:?}", response.status(), e);
                     continue  // Attempt next url
                 }
                 response
             },
             Err(e) => {
-                error!("Error signing with certissuer: {:?}", e);
+                info!("Error signing with certissuer: {:?}", e);
                 continue  // Attempt next url
             }
         };
