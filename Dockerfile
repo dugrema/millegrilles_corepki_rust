@@ -27,7 +27,7 @@ RUN touch src/main.rs && cargo build --release
 FROM debian:trixie-slim
 
 ENV APP_FOLDER=/usr/src/app \
-    RUST_LOG=warn \
+    RUST_LOG="error,millegrilles_corepki_rust=info,millegrilles_common_rust=warn" \
     MG_MQ_HOST=mq \
     MG_MONGO_HOST=mongo \
     CAFILE=/run/secrets/millegrille.cert.pem \

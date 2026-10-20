@@ -19,7 +19,9 @@ use std::sync::Mutex;
 #[derive(Clone, Debug)]
 pub struct SigningState {
     /// List of urls used to connect to certissuer
-    certissuer_urls: Vec<Url>
+    certissuer_urls: Vec<Url>,
+    /// Set to true once CoreTopology has responded (useful in systems restarts)
+    initialized: bool,
 }
 
 impl SigningState {
@@ -30,9 +32,14 @@ impl SigningState {
         };
 
         Ok(Self {
-            certissuer_urls
+            certissuer_urls,
+            initialized: false,
         })
     }
+}
+
+pub fn is_signing_state_initialized(signing_state: &Mutex<SigningState>) -> bool {
+    signing_state.lock().unwrap().initialized
 }
 
 pub async fn refresh_signing(
@@ -53,6 +60,13 @@ pub async fn refresh_signing(
     ).build();
     let request_config = RequestTopologyConfiguration { filename: CONFIG_TOPOLOGY_CERTISSUER_PKI.to_string() };
     let response_config = outbound.send_request(routing_config, request_config).await?;
+
+    // Response obtained from CoreTopology, mark as initialized
+    {
+        let mut guard = state.lock().expect("Failed to lock mutex");
+        guard.initialized = true;
+    }
+
     if response_config.message.kind != MessageKind::ReponseChiffree {
         if let (true, error) = response_config.is_err()? {
             info!("Certissuer configuration {} not defined: {:?}", REQUEST_TOPOLOGY_PROPERTIES, error);

@@ -1,3 +1,4 @@
+use std::sync::Mutex;
 use crate::constants::*;
 use crate::external::mongo::COLLECTION_NAME_REDOLOG;
 use millegrilles_common_rust::certificats::VerificateurPermissions;
@@ -8,11 +9,14 @@ use millegrilles_common_rust::messages_generiques::MessageCedule;
 use millegrilles_common_rust::tracing::{debug, error, info, warn};
 use millegrilles_common_rust::v3::facades::message_inbound::MessageValidated;
 use millegrilles_common_rust::v3::facades::message_outbound::MessageOutboundFacade;
-use millegrilles_common_rust::v3::{BackupService, PresenceService};
+use millegrilles_common_rust::v3::{BackupService, ConfigService, PresenceService};
+use crate::flow::signing::{is_signing_state_initialized, SigningState, refresh_signing};
 
 pub async fn process_ticker_job(
+    config: &dyn ConfigService,
     outbound: &MessageOutboundFacade,
     backup: &dyn BackupService,
+    signing_state: &Mutex<SigningState>,
     trigger: MessageValidated
 ) -> Result<(), CommonError> {
     // Ensure this is an authorized module
@@ -33,7 +37,17 @@ pub async fn process_ticker_job(
     if let Err(e) = outbound.emit_domain_presence(DOMAIN_NAME, None).await {
         warn!("Error emitting domain presence: {}", e);
     }
-
+    
+    // Delayed initialization
+    
+    if ! is_signing_state_initialized(signing_state) {
+        if let Err(e) = refresh_signing(signing_state, config, outbound).await {
+            warn!("Error initializing signing state, will retry: {}", e);
+        }
+    }
+    
+    // Backup
+    
     if minute % 30 == 4 {
         // {
         // Run complete backup once a week on Sunday at 7:04 UTC.
