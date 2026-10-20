@@ -12,11 +12,25 @@ use millegrilles_common_rust::v3::facades::message_outbound::MessageOutboundFaca
 use millegrilles_common_rust::v3::{BackupService, ConfigService, PresenceService};
 use crate::flow::signing::{is_signing_state_initialized, SigningState, refresh_signing};
 
-pub async fn process_ticker_job(
+pub async fn process_maintenance(
     config: &dyn ConfigService,
     outbound: &MessageOutboundFacade,
-    backup: &dyn BackupService,
     signing_state: &Mutex<SigningState>,
+) -> Result<(), CommonError> {
+    // Delayed initialization
+
+    if ! is_signing_state_initialized(signing_state) {
+        if let Err(e) = refresh_signing(signing_state, config, outbound).await {
+            warn!("Error initializing signing state, will retry: {}", e);
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn process_ticker_job(
+    outbound: &MessageOutboundFacade,
+    backup: &dyn BackupService,
     trigger: MessageValidated
 ) -> Result<(), CommonError> {
     // Ensure this is an authorized module
@@ -37,17 +51,9 @@ pub async fn process_ticker_job(
     if let Err(e) = outbound.emit_domain_presence(DOMAIN_NAME, None).await {
         warn!("Error emitting domain presence: {}", e);
     }
-    
-    // Delayed initialization
-    
-    if ! is_signing_state_initialized(signing_state) {
-        if let Err(e) = refresh_signing(signing_state, config, outbound).await {
-            warn!("Error initializing signing state, will retry: {}", e);
-        }
-    }
-    
+
     // Backup
-    
+
     if minute % 30 == 4 {
         // {
         // Run complete backup once a week on Sunday at 7:04 UTC.

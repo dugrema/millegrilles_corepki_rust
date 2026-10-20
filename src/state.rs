@@ -167,7 +167,8 @@ async fn start_threads(
 
     if ! is_restoring {
         // Spawn consumer threads
-        app_service.start(join_set, inbound.clone())?;
+        let shutdown_token_clone = shutdown_token.clone();
+        app_service.start(join_set, inbound.clone(), shutdown_token_clone)?;
     } else {
         let master_key = match master_key {
             Some(key) => key,

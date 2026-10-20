@@ -8,17 +8,20 @@ use millegrilles_common_rust::openssl::pkey::{PKey, Private};
 use millegrilles_common_rust::tokio;
 use millegrilles_common_rust::tokio::task::JoinSet;
 use millegrilles_common_rust::tokio_stream::StreamExt;
-use millegrilles_common_rust::tracing::{debug, error, info};
+use millegrilles_common_rust::tracing::{debug, error, info, warn};
 use millegrilles_common_rust::v3::facades::message_inbound::MessageInboundValidator;
 use millegrilles_common_rust::v3::facades::message_outbound::MessageOutboundFacade;
 use millegrilles_common_rust::v3::impls::backup_restorer::RestorationState;
 use millegrilles_common_rust::v3::impls::messaging_service::MessagingServiceImpl;
 use millegrilles_common_rust::v3::{BackupService, ChiffrageService, ConfigService, PkiService};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use millegrilles_common_rust::tokio::select;
+use millegrilles_common_rust::tokio_util::sync::CancellationToken;
 use crate::flow::backup::process_backup;
 use crate::flow::commands::{process_command, process_transaction};
 use crate::flow::events::process_events;
-use crate::flow::maintenance::process_ticker_job;
+use crate::flow::maintenance::{process_maintenance, process_ticker_job};
 use crate::flow::requests::process_request;
 use crate::flow::signing::{refresh_signing, SigningState};
 use crate::flow::transactions::PkiTransactionService;
@@ -65,7 +68,12 @@ impl ApplicationService {
     }
 
     /// Call to spawn the consumer threads
-    pub fn start(self: Arc<Self>, join_set: &mut JoinSet<()>, incoming: Arc<MessageInboundValidator>) -> Result<(), CommonError> {
+    pub fn start(
+        self: Arc<Self>,
+        join_set: &mut JoinSet<()>,
+        incoming: Arc<MessageInboundValidator>,
+        shutdown_token: CancellationToken
+    ) -> Result<(), CommonError> {
 
         let self_clone = self.clone();
         let incoming_clone = incoming.clone();
@@ -91,6 +99,16 @@ impl ApplicationService {
         let incoming_clone = incoming.clone();
         join_set.spawn(async move {self_clone.process_backup_thread(incoming_clone).await});
 
+        let self_clone = self.clone();
+
+        // Start the maintenance thread - it waits on tokio::sleep so force cancel it when stopping.
+        join_set.spawn(async move {
+            select! {
+                _ = self_clone.maintenance_thread() => {},
+                _ = shutdown_token.cancelled() => {},
+            }
+        });
+
         Ok(())
     }
     
@@ -103,10 +121,8 @@ impl ApplicationService {
             match result {
                 Ok(message) => {
                     if let Err(e) = process_ticker_job(
-                        self.config.as_ref(),
                         self.outbound.as_ref(),
                         self.backup.as_ref(),
-                        self.signing_state.as_ref(),
                         message
                     ).await {
                         error!("Ticker job failed: {}", e);
@@ -246,6 +262,22 @@ impl ApplicationService {
             }
         }
         debug!("process_readings_thread Closed");
+    }
+
+    /// Local thread (not jobs) that triggers maintenance processes then waits a minute before restarting.
+    async fn maintenance_thread(&self) {
+        // Wait for connection to be ready before starting maintenance
+        self.outbound.wait_ready(None).await.ok();
+        warn!("maintenance thread starting");
+
+        loop {
+            tokio::time::sleep(Duration::from_mins(1)).await;
+            debug!("maintenance_thread running");
+            if let Err(e) = process_maintenance(self.config.as_ref(), self.outbound.as_ref(), self.signing_state.as_ref()).await {
+                error!("Maintenance failed: {}", e);
+            }
+            debug!("maintenance_thread done");
+        }
     }
 
     pub async fn restore(
