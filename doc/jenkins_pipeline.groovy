@@ -3,14 +3,14 @@ pipeline {
 
     parameters {
         string(defaultValue: 'master', name: 'BRANCH')
-        string(defaultValue: '2026.6', name: 'VERSION')
+        string(defaultValue: '2026.7', name: 'VERSION')
         string(defaultValue: 'jenkins-maple', name: 'CREDENTIALS_ID')
         string(defaultValue: 'ssh://git.maple.maceroc.com/git/millegrilles_corepki_rust', name: 'GIT_URL')
-        string(defaultValue: 'registry.millegrilles.com:5000/millegrilles/corepki_rust', name: 'DOCKER_IMAGE')
+        string(defaultValue: 'vmhost2.maple.maceroc.com/millegrilles/corepki_rust', name: 'DOCKER_IMAGE')
     }
 
     environment {
-        NOM_APP="millegrilles_documents"
+        NOM_APP="millegrilles_corepki_rust"
         VBUILD="${VERSION}.${BUILD_NUMBER}"
         DOCKER_IMAGE="${params.DOCKER_IMAGE}"
     }
@@ -24,7 +24,13 @@ pipeline {
 
         stage('Build & Package & Deploy') {
             steps {
-                sh "make deploy"
+                withCredentials([usernamePassword(
+                    credentialsId: 'nexus-jenkins',
+                    usernameVariable: 'NEXUS_USER',
+                    passwordVariable: 'NEXUS_PASS'
+                )]) {
+                    sh "make deploy"
+                }
             }
         }
 
