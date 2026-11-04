@@ -32,7 +32,8 @@ pub async fn process_command(
         None => return outbound.respond(wrapper.delivery_info, ErrorMessage::err("No action provided in command")).await
     };
 
-    match wrapper.message.kind {
+    let delivery_info = wrapper.delivery_info.clone();
+    let result = match wrapper.message.kind {
         MessageKind::Commande => {
             match action {
                 COMMAND_ACTION_SIGN_CSR => sign_csr(signing_state, outbound, wrapper).await,
@@ -56,9 +57,14 @@ pub async fn process_command(
             info!("Unhandled message type with action {} for process_command, skipping", action);
             Ok(())
         }
+    };
+
+    // Ensure a response is sent
+    if result.is_err() {
+        outbound.respond(delivery_info, ErrorMessage::err_code(500, "Server error")).await.ok();
     }
 
-
+    result
 }
 
 async fn sign_csr(

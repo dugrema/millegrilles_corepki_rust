@@ -127,6 +127,7 @@ pub struct RequestCertificate {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ReponseEnveloppe {
+    pub ok: bool,
     pub chaine_pem: Vec<String>,
     pub fingerprint: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -137,6 +138,7 @@ impl TryFrom<&EnveloppeCertificat> for ReponseEnveloppe {
     type Error = CommonError;
     fn try_from(value: &EnveloppeCertificat) -> Result<Self, Self::Error> {
         Ok(Self {
+            ok: true,
             chaine_pem: value.chaine_pem()?,
             fingerprint: value.fingerprint()?,
             ca_pem: value.ca_pem()?,
@@ -148,6 +150,7 @@ impl TryFrom<CertificateRow> for ReponseEnveloppe {
     type Error = CommonError;
     fn try_from(value: CertificateRow) -> Result<Self, Self::Error> {
         Ok(Self {
+            ok: true,
             chaine_pem: value.certificat,
             fingerprint: value.fingerprint,
             ca_pem: value.ca,

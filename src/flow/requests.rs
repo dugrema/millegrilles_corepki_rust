@@ -23,14 +23,23 @@ pub async fn process_request<M>(
         Some(action) => action,
         None => return outbound.respond(wrapper.delivery_info, ErrorMessage::err("No action provided in transaction")).await
     };
-    match action {
+
+    let delivery_info = wrapper.delivery_info.clone();
+    let result = match action {
         REQUEST_ACTION_INFOCERTIFICAT => request_certificate(mongo, outbound, wrapper).await,
         REQUEST_ACTION_CERTIFICATEBYPK => request_certificate_by_pk(mongo, outbound, wrapper).await,
         _ => {
             info!("Unknown action {} for process_requests, skipping", action);
             Ok(())
         }
+    };
+
+    // Ensure a response is sent
+    if result.is_err() {
+        outbound.respond(delivery_info, ErrorMessage::err_code(500, "Server error")).await.ok();
     }
+
+    result
 }
 
 async fn request_certificate<M>(
