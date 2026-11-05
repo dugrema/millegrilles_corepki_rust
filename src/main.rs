@@ -25,7 +25,7 @@ async fn main() {
     let cli = Cli::parse();
     let master_key = parse_ca_password(&cli);
 
-    info!("Starting SenseursPassifs backend service");
+    info!("Starting CorePki backend service");
 
     // Start the application by creating the context. This starts all threads and connections.
     let mut context = AppContext::new(&cli, master_key).await.expect("AppContext::new");
